@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+option go_package = "github.com/aloknerurkar/msuite-services/auth/pb";
+package auth;
+
+import "google/api/annotations.proto";
+
+enum LoginType {
+    NONE            = 0;
+    EMAIL           = 1;
+    MOBILE          = 2;
+    OAUTH_PROVIDER  = 3;
+}
+
+message AuthCredentials {
+    LoginType type  = 1;
+    string username = 2;
+    string password = 3;
+}
+
+message VerifyReq {
+    string          code  = 1;
+    AuthCredentials creds = 2;
+}
+
+message AuthResponse {}
+
+message AuthResult {
+    string user_id       = 1;
+    string access_token  = 2;
+    string refresh_token = 3;
+}
+
+message UpdateCredentials {
+    string user_id      = 1;
+    string new_password = 2;
+    string old_password = 3;
+    string access_token = 4;
+}
+
+message UnverifiedUser {
+    string          code     = 1;
+    LoginType       type     = 2;
+    string          username = 3;
+    bytes           password = 4;
+    bool            verified = 5;
+    int64           created  = 98;
+    int64           updated  = 99;
+}
+
+message VerifiedUser {
+    string          UserId       = 1;
+    LoginType       type         = 2;
+    string          username     = 3;
+    bytes           password     = 4;
+    bytes           temp_pwd     = 5;
+    bool            use_temp_pwd = 6;
+    string          role         = 7;
+    int64           created      = 98;
+    int64           updated      = 99;
+}
+
+service Auth {
+
+    // Used to register client with the AuthService.
+    rpc Register (AuthCredentials) returns (AuthResponse) {
+        option (google.api.http) = {
+            post: "/v1/register"
+            body: "*"
+        };
+    }
+
+    // Used to complete verification.
+    rpc Verify (VerifyReq) returns (AuthResponse) {
+        option (google.api.http) = {
+            post: "/v1/verify/{code}"
+        };
+    }
+
+    // Used for authentication.
+    rpc Authenticate (AuthCredentials) returns (AuthResult) {
+        option (google.api.http) = {
+            post: "/v1/authenticate"
+            body: "*"
+        };
+    }
+
+    // Used to get new token
+    rpc RefreshToken (AuthResult) returns (AuthResult) {
+        option (google.api.http) = {
+            post: "/v1/refresh_token"
+            body: "*"
+        };
+    }
+
+    // Two types of reset scenarios:
+    // 1. User forgets password. Using ForgotPassword he will get a temporary
+    //    password in the email. Then he has to login using the temp password
+    //    and then reset the password.
+    // 2. Logged In user wants to reset his password. Currently, if the
+    //    user has a valid token, we will allow reset if he correctly
+    //    supplies the old password.
+    rpc ResetPassword (UpdateCredentials) returns (AuthResponse) {
+        option (google.api.http) = {
+            post: "/v1/reset_password"
+            body: "*"
+        };
+    }
+
+    // In case if the user forgets the password, he will call this API
+    // to send an email with a temporary password.
+    rpc ForgotPassword (AuthCredentials) returns (AuthResponse) {
+        option (google.api.http) = {
+            post: "/v1/forgot_password/{username}"
+        };
+    }
+
+    // If the user did not initiate the ForgotPassword workflow,
+    // he will use this API to reset his old password.
+    rpc ReportUnauthorizedPwdChange (AuthCredentials) returns (AuthResponse) {
+        option (google.api.http) = {
+            post: "/v1/report_pwd_change/{username}"
+        };
+    }
+}
+

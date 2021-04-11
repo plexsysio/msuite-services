@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+option go_package = "gitlab.com/go-msuite/notifications/pb";
+package notifications;
+
+import "google/api/annotations.proto";
+
+service Notifications {
+    rpc Subscribe(SubscribeReq) returns (ID) {
+        option (google.api.http) = {
+            post: "/notifications/v1/subscribe"
+            body: "*"
+        };
+    }
+
+    rpc Send(SendReq) returns (Notification) {
+        option (google.api.http) = {
+            post: "/notifications/v1/send"
+            body: "*"
+        };
+    }
+
+    rpc Get(IDs) returns (NotificationList) {
+        option (google.api.http) = {
+            get: "/notifications/v1/get"
+        };
+    }
+}
+
+enum NotificationType {
+    RESERVED    = 0;
+    EMAIL       = 1;
+    SMS         = 2;
+    WEB         = 4;
+    ANDROID     = 8;
+    IOS         = 16;
+    // Pull type is basically a notification which will be pulled
+    // by client subsequently. We just need to save the notification
+    // in this case.
+    // The value is such that, any of the WEB, ANDROID or IOS providers
+    // can be used to send the notification if they exist.
+    PULL        = 28;
+}
+
+message ID {
+	string val = 1;
+}
+
+message IDs {
+	repeated string vals = 1;
+}
+
+message SubscriberInfo {
+    NotificationType  mode  = 1;
+    string            identifier = 2;
+}
+
+message SubscribeReq {
+    string user_id = 1;
+    repeated SubscriberInfo subscriptions = 2;
+}
+
+message Msg {
+    string from = 1;
+    string to = 2;
+    string title = 3;
+    string body = 4;
+}
+
+message SendReq {
+    NotificationType type    = 1;
+    string           user_id = 2;
+    Msg              data    = 3;
+}
+
+message Notification {
+    string           id      = 1;
+    string           user_id = 2;
+    NotificationType type    = 3;
+    Msg              data    = 4;
+    int64            created = 98;
+    int64            updated = 99;
+}
+
+message NotificationList {
+    repeated Notification items = 1;
+}
+
