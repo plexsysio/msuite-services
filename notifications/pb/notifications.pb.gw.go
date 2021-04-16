@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/aloknerurkar/msuite-services/common/pb"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/utilities"
 	"google.golang.org/grpc"
@@ -104,7 +105,7 @@ var (
 )
 
 func request_Notifications_Get_0(ctx context.Context, marshaler runtime.Marshaler, client NotificationsClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq IDs
+	var protoReq pb.UUIDs
 	var metadata runtime.ServerMetadata
 
 	if err := req.ParseForm(); err != nil {
@@ -120,7 +121,7 @@ func request_Notifications_Get_0(ctx context.Context, marshaler runtime.Marshale
 }
 
 func local_request_Notifications_Get_0(ctx context.Context, marshaler runtime.Marshaler, server NotificationsServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq IDs
+	var protoReq pb.UUIDs
 	var metadata runtime.ServerMetadata
 
 	if err := req.ParseForm(); err != nil {
@@ -147,7 +148,7 @@ func RegisterNotificationsHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/pb.Notifications/Subscribe")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/notifications.Notifications/Subscribe")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -170,7 +171,7 @@ func RegisterNotificationsHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/pb.Notifications/Send")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/notifications.Notifications/Send")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -193,7 +194,7 @@ func RegisterNotificationsHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/pb.Notifications/Get")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/notifications.Notifications/Get")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -255,7 +256,7 @@ func RegisterNotificationsHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/pb.Notifications/Subscribe")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/notifications.Notifications/Subscribe")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -275,7 +276,7 @@ func RegisterNotificationsHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/pb.Notifications/Send")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/notifications.Notifications/Send")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -295,7 +296,7 @@ func RegisterNotificationsHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/pb.Notifications/Get")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/notifications.Notifications/Get")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return

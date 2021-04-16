@@ -5,6 +5,7 @@ import (
 	"github.com/aloknerurkar/dLocker"
 	"github.com/aloknerurkar/go-msuite/lib"
 	"github.com/aloknerurkar/msuite-services/app_errors"
+	msgs "github.com/aloknerurkar/msuite-services/common/pb"
 	"github.com/aloknerurkar/msuite-services/payments/pb"
 	"github.com/aloknerurkar/msuite-services/payments/providers"
 	proto "github.com/golang/protobuf/proto"
@@ -184,7 +185,7 @@ func (p *payments) RefundCharge(c context.Context,
 
 func (p *payments) Get(
 	c context.Context,
-	ids *pb.IDs,
+	ids *msgs.UUIDs,
 ) (retItems *pb.Charges, retErr error) {
 
 	ch := make(chan *chargeObj)
@@ -235,7 +236,7 @@ func (p *payments) Get(
 
 func (p *payments) List(
 	c context.Context,
-	req *pb.ListReq,
+	req *msgs.ListReq,
 ) (retItems *pb.Charges, retErr error) {
 	listOpt := store.ListOpt{
 		Page:  req.Page,

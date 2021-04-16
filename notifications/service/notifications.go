@@ -11,6 +11,7 @@ import (
 	"github.com/aloknerurkar/go-msuite/lib"
 	"github.com/aloknerurkar/go-msuite/modules/events"
 	"github.com/aloknerurkar/msuite-services/app_errors"
+	msgs "github.com/aloknerurkar/msuite-services/common/pb"
 	"github.com/aloknerurkar/msuite-services/notifications/pb"
 	"github.com/aloknerurkar/msuite-services/notifications/providers"
 	proto "github.com/golang/protobuf/proto"
@@ -132,7 +133,7 @@ func New(svc msuite.Service) error {
 func (s *notifications) Subscribe(
 	c context.Context,
 	req *pb.SubscribeReq,
-) (resp *pb.ID, retErr error) {
+) (resp *msgs.UUID, retErr error) {
 
 	err := s.dbP.Create(&subscriber{SubscribeReq: req})
 	if err != nil {
@@ -140,7 +141,7 @@ func (s *notifications) Subscribe(
 		log.Errorf("Failed to get store User %v SecErr:%s", req, err.Error())
 		return
 	}
-	resp = &pb.ID{Val: req.UserId}
+	resp = &msgs.UUID{Val: req.UserId}
 	log.Info("Created new subscriber %v", req)
 	return
 }
@@ -214,7 +215,7 @@ func (s *notifications) Send(
 
 func (s *notifications) Get(
 	c context.Context,
-	ids *pb.IDs,
+	ids *msgs.UUIDs,
 ) (retItems *pb.NotificationList, retErr error) {
 
 	ch := make(chan *notifObj)

@@ -4,6 +4,7 @@ package pb
 
 import (
 	context "context"
+	pb "github.com/aloknerurkar/msuite-services/common/pb"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -11,15 +12,16 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
+// Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
 // NotificationsClient is the client API for Notifications service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type NotificationsClient interface {
-	Subscribe(ctx context.Context, in *SubscribeReq, opts ...grpc.CallOption) (*ID, error)
+	Subscribe(ctx context.Context, in *SubscribeReq, opts ...grpc.CallOption) (*pb.UUID, error)
 	Send(ctx context.Context, in *SendReq, opts ...grpc.CallOption) (*Notification, error)
-	Get(ctx context.Context, in *IDs, opts ...grpc.CallOption) (*NotificationList, error)
+	Get(ctx context.Context, in *pb.UUIDs, opts ...grpc.CallOption) (*NotificationList, error)
 }
 
 type notificationsClient struct {
@@ -30,9 +32,9 @@ func NewNotificationsClient(cc grpc.ClientConnInterface) NotificationsClient {
 	return &notificationsClient{cc}
 }
 
-func (c *notificationsClient) Subscribe(ctx context.Context, in *SubscribeReq, opts ...grpc.CallOption) (*ID, error) {
-	out := new(ID)
-	err := c.cc.Invoke(ctx, "/pb.Notifications/Subscribe", in, out, opts...)
+func (c *notificationsClient) Subscribe(ctx context.Context, in *SubscribeReq, opts ...grpc.CallOption) (*pb.UUID, error) {
+	out := new(pb.UUID)
+	err := c.cc.Invoke(ctx, "/notifications.Notifications/Subscribe", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -41,16 +43,16 @@ func (c *notificationsClient) Subscribe(ctx context.Context, in *SubscribeReq, o
 
 func (c *notificationsClient) Send(ctx context.Context, in *SendReq, opts ...grpc.CallOption) (*Notification, error) {
 	out := new(Notification)
-	err := c.cc.Invoke(ctx, "/pb.Notifications/Send", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/notifications.Notifications/Send", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *notificationsClient) Get(ctx context.Context, in *IDs, opts ...grpc.CallOption) (*NotificationList, error) {
+func (c *notificationsClient) Get(ctx context.Context, in *pb.UUIDs, opts ...grpc.CallOption) (*NotificationList, error) {
 	out := new(NotificationList)
-	err := c.cc.Invoke(ctx, "/pb.Notifications/Get", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/notifications.Notifications/Get", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -61,9 +63,9 @@ func (c *notificationsClient) Get(ctx context.Context, in *IDs, opts ...grpc.Cal
 // All implementations must embed UnimplementedNotificationsServer
 // for forward compatibility
 type NotificationsServer interface {
-	Subscribe(context.Context, *SubscribeReq) (*ID, error)
+	Subscribe(context.Context, *SubscribeReq) (*pb.UUID, error)
 	Send(context.Context, *SendReq) (*Notification, error)
-	Get(context.Context, *IDs) (*NotificationList, error)
+	Get(context.Context, *pb.UUIDs) (*NotificationList, error)
 	mustEmbedUnimplementedNotificationsServer()
 }
 
@@ -71,13 +73,13 @@ type NotificationsServer interface {
 type UnimplementedNotificationsServer struct {
 }
 
-func (UnimplementedNotificationsServer) Subscribe(context.Context, *SubscribeReq) (*ID, error) {
+func (UnimplementedNotificationsServer) Subscribe(context.Context, *SubscribeReq) (*pb.UUID, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
 }
 func (UnimplementedNotificationsServer) Send(context.Context, *SendReq) (*Notification, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Send not implemented")
 }
-func (UnimplementedNotificationsServer) Get(context.Context, *IDs) (*NotificationList, error) {
+func (UnimplementedNotificationsServer) Get(context.Context, *pb.UUIDs) (*NotificationList, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
 }
 func (UnimplementedNotificationsServer) mustEmbedUnimplementedNotificationsServer() {}
@@ -90,7 +92,7 @@ type UnsafeNotificationsServer interface {
 }
 
 func RegisterNotificationsServer(s grpc.ServiceRegistrar, srv NotificationsServer) {
-	s.RegisterService(&_Notifications_serviceDesc, srv)
+	s.RegisterService(&Notifications_ServiceDesc, srv)
 }
 
 func _Notifications_Subscribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -103,7 +105,7 @@ func _Notifications_Subscribe_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/pb.Notifications/Subscribe",
+		FullMethod: "/notifications.Notifications/Subscribe",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NotificationsServer).Subscribe(ctx, req.(*SubscribeReq))
@@ -121,7 +123,7 @@ func _Notifications_Send_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/pb.Notifications/Send",
+		FullMethod: "/notifications.Notifications/Send",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NotificationsServer).Send(ctx, req.(*SendReq))
@@ -130,7 +132,7 @@ func _Notifications_Send_Handler(srv interface{}, ctx context.Context, dec func(
 }
 
 func _Notifications_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(IDs)
+	in := new(pb.UUIDs)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -139,16 +141,19 @@ func _Notifications_Get_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/pb.Notifications/Get",
+		FullMethod: "/notifications.Notifications/Get",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NotificationsServer).Get(ctx, req.(*IDs))
+		return srv.(NotificationsServer).Get(ctx, req.(*pb.UUIDs))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-var _Notifications_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "pb.Notifications",
+// Notifications_ServiceDesc is the grpc.ServiceDesc for Notifications service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Notifications_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "notifications.Notifications",
 	HandlerType: (*NotificationsServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

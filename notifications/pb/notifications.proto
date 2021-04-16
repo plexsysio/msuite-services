@@ -3,10 +3,11 @@ syntax = "proto3";
 option go_package = "gitlab.com/go-msuite/notifications/pb";
 package notifications;
 
-import "google/api/annotations.proto";
+import "common/pb/annotations.proto";
+import "common/pb/common.proto";
 
 service Notifications {
-    rpc Subscribe(SubscribeReq) returns (ID) {
+    rpc Subscribe(SubscribeReq) returns (msgs.UUID) {
         option (google.api.http) = {
             post: "/notifications/v1/subscribe"
             body: "*"
@@ -20,7 +21,7 @@ service Notifications {
         };
     }
 
-    rpc Get(IDs) returns (NotificationList) {
+    rpc Get(msgs.UUIDs) returns (NotificationList) {
         option (google.api.http) = {
             get: "/notifications/v1/get"
         };
@@ -40,14 +41,6 @@ enum NotificationType {
     // The value is such that, any of the WEB, ANDROID or IOS providers
     // can be used to send the notification if they exist.
     PULL        = 28;
-}
-
-message ID {
-	string val = 1;
-}
-
-message IDs {
-	repeated string vals = 1;
 }
 
 message SubscriberInfo {

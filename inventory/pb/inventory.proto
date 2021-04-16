@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+option go_package = "github.com/aloknerurkar/msuite-services/inventory/pb";
+
+package inventory;
+
+import "common/pb/common.proto";
+import "payments/pb/payments.proto";
+import "common/pb/annotations.proto";
+
+message Rate {
+    enum RateType {
+        RATE_RESERVED = 0;    // Not to be used.
+        MONTHLY = 1;
+        QUARTERLY = 2;
+        SEMI_ANNUALLY = 3;
+        ANNUALLY = 4;
+        PER_ITEM = 5;
+    }
+    RateType type = 1;
+    int64 amount = 2;
+    payments.Currency currency = 3;
+}
+
+message PackageDimensions {
+   double height = 1;
+   double width = 2;
+   double length = 3;
+   double weight = 4;
+}
+
+message Item {
+    string id = 1;
+    repeated Rate rates = 2;
+    bool active = 3;
+    int32 count = 4;
+    string parent = 5;
+    map<string, string> metadata = 6;
+    map<string, string> attributes = 7;
+    PackageDimensions dimensions = 8;
+    int64 created = 98;
+    int64 updated = 99;
+}
+
+message Items {
+    repeated Item items = 1;
+}
+
+message UpdateReq {
+    enum UpdateAttr {
+        NEW = 0;
+        COUNT = 1;
+        RATE = 2;
+        ACTIVE = 4;
+        METADATA = 8;
+    }
+    int32 map = 1;
+    Item item = 2;
+}
+
+service Inventory {
+   rpc Get(msgs.UUIDs) returns (Items) {
+      option (google.api.http) = {
+         get: "/inventory/v1/get"
+      };
+   }
+   rpc Update(UpdateReq) returns (Item) {
+      option (google.api.http) = {
+         post: "/inventory/v1/update"
+         body: "*"
+      };
+
+   }
+   rpc List(msgs.ListReq) returns (Items) {
+      option (google.api.http) = {
+         get: "/inventory/v1/list/{page}/{limit}"
+      };
+
+   }
+}

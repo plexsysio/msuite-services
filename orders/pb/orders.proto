@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+option go_package = "gitlab.com/trainer/orders/pb";
+
+package orders;
+
+import "common/pb/common.proto";
+import "common/pb/annotations.proto";
+import "payments/pb/payments.proto";
+import "inventory/pb/inventory.proto";
+
+message Item {
+    string id = 1;
+    int64  amount   = 2;
+    payments.Currency currency = 3;
+    enum OrderStatus {
+        RESERVED = 0;   // Not to be used.
+        CREATED = 1;
+        PAID = 2;
+        CANCELLED = 3;
+        COMPLETED = 4;
+        RETURNED = 5;
+    }
+    OrderStatus status = 4;
+    string user_id = 5;
+    repeated OrderItem items = 6;
+    string email = 7;
+    string payment_id = 8;
+    map<string, string> meta = 9;
+    ShippingInfo shipping = 10;
+    // Add new fields here.
+    int64 created = 98;
+    int64 updated = 99;
+}
+
+message OrderItem {
+    enum Type {
+        RESERVED = 0;
+        INVENTORY = 1;
+        DISCOUNT = 2;
+        TAX = 3;
+        INSURANCE = 4;
+        SHIPPING = 5;
+    }
+    Type type = 1;
+    int64 amount = 2;
+    payments.Currency currency = 3;
+    string parent_id = 4;
+    int64 quantity = 5;
+    string description = 6;
+}
+
+message ShippingInfo {
+    string name = 1;
+    string phone = 2;
+    msgs.LongAddress address = 3;
+    string carrier = 4;
+    string trackingNumber = 5;
+}
+
+message Items {
+    repeated Item items = 1;
+}
+
+message NewOrderReq {
+    string item_id = 1;
+    inventory.Rate rate = 2;
+    repeated OrderItem items = 3;
+    string email = 4;
+    string user_id = 5;
+    string child_id = 6;
+}
+
+message PayOrderReq {
+    message PaySplit {
+        payments.ProviderId provider = 1;
+        oneof Charge {
+            string user_id = 2;
+            payments.Card card = 3;
+            string payment_ref = 4;
+        }
+    }
+    string order_id = 1;
+    repeated PaySplit charges = 2;
+}
+
+service Orders {
+    rpc NewOrder(NewOrderReq) returns (Item) {
+      option (google.api.http) = {
+         post: "/orders/v1/new"
+         body: "*"
+      };
+    }
+    rpc PayOrder(PayOrderReq) returns (Item) {
+      option (google.api.http) = {
+         post: "/orders/v1/pay"
+         body: "*"
+      };
+    }
+    rpc ReturnOrder(msgs.UUID) returns (Item) {
+      option (google.api.http) = {
+         get: "/orders/v1/return/{val}"
+      };
+    }
+    rpc Get(msgs.UUIDs) returns (Items) {
+      option (google.api.http) = {
+         get: "/orders/v1/get"
+      };
+   }
+   rpc List(msgs.ListReq) returns (Items) {
+      option (google.api.http) = {
+         get: "/orders/v1/list/{page}/{limit}"
+      };
+   }
+}

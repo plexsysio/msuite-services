@@ -3,6 +3,9 @@ syntax = "proto3";
 option go_package = "github.com/aloknerurkar/msuite-services/payments/pb";
 package payments;
 
+import "common/pb/common.proto";
+import "common/pb/annotations.proto";
+
 enum Currency {
     RESERVED = 0;
     AFN = 1;
@@ -231,27 +234,27 @@ message Charges {
     repeated Charge charges = 1;
 }
 
-message IDs {
-   repeated string vals = 1;
-}
-
-message ListReq {
-   int64 page = 1;
-   int64 limit = 2;
-   Sort sort = 3;
-   int64 version = 4;
-   enum Sort {
-      Natural = 0;
-      CreatedDesc = 1;
-      CreatedAsc = 2;
-      UpdatedDesc = 3;
-      UpdatedAsc = 4;
-   }
-}
-
 service Payments {
-    rpc NewCharge(ChargeReq) returns (Charge) {}
-    rpc RefundCharge(RefundReq) returns (Refund) {}
-    rpc Get(IDs) returns (Charges) {}
-    rpc List(ListReq) returns (Charges) {}
+   rpc NewCharge(ChargeReq) returns (Charge) {
+      option (google.api.http) = {
+         post: "/payments/v1/charge"
+         body: "*"
+      };
+   }
+   rpc RefundCharge(RefundReq) returns (Refund) {
+      option (google.api.http) = {
+         post: "/payments/v1/refund"
+         body: "*"
+      };
+   }
+   rpc Get(msgs.UUIDs) returns (Charges) {
+      option (google.api.http) = {
+         get: "/payments/v1/get"
+      };
+   }
+   rpc List(msgs.ListReq) returns (Charges) {
+      option (google.api.http) = {
+         get: "/payments/v1/list/{page}/{limit}"
+      };
+   }
 }

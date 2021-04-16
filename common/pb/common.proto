@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+option go_package = "github.com/aloknerurkar/msuite-services/common/pb";
+
+package msgs;
+
+import "common/pb/annotations.proto";
+
+/*
+ * All the common messages will be defined here.
+ */
+
+message EmptyMessage {}
+
+message UUID {
+    string val = 1;
+}
+
+message UUIDs {
+    repeated string vals = 1;
+}
+
+message ListReq {
+	int64 page = 1;
+	int64 limit = 2;
+	Sort sort = 3;
+   int64 version = 4;
+	enum Sort {
+		Natural = 0;
+		CreatedDesc = 1;
+		CreatedAsc = 2;
+		UpdatedDesc = 3;
+		UpdatedAsc = 4;
+	}
+}
+
+enum UpdateOp {
+   Overwrite = 0;
+   Add = 1;
+   Del = 2;
+}
+
+message GeoLocation {
+    string latitude = 1;
+    string longitude = 2;
+    string radius = 3;
+}
+
+message LongAddress {
+    string address_street = 1;
+    string address_street_2 = 2;
+    string city = 3;
+    string state = 4;
+    string zip = 5;
+    string country = 6;
+}
+
+message LocationInfo {
+    LongAddress address = 1;
+    GeoLocation location = 2;
+}
+
+message StringPair {
+    map<string,string> map = 1;
+}
+
+service HeartBeat {
+    rpc GetHeartBeat (EmptyMessage) returns (EmptyMessage) {
+        option (google.api.http) = {
+            get: "/v1/heartbeat"
+        };
+    }
+}

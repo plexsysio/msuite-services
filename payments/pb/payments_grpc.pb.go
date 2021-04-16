@@ -4,6 +4,7 @@ package pb
 
 import (
 	context "context"
+	pb "github.com/aloknerurkar/msuite-services/common/pb"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -20,8 +21,8 @@ const _ = grpc.SupportPackageIsVersion7
 type PaymentsClient interface {
 	NewCharge(ctx context.Context, in *ChargeReq, opts ...grpc.CallOption) (*Charge, error)
 	RefundCharge(ctx context.Context, in *RefundReq, opts ...grpc.CallOption) (*Refund, error)
-	Get(ctx context.Context, in *IDs, opts ...grpc.CallOption) (*Charges, error)
-	List(ctx context.Context, in *ListReq, opts ...grpc.CallOption) (*Charges, error)
+	Get(ctx context.Context, in *pb.UUIDs, opts ...grpc.CallOption) (*Charges, error)
+	List(ctx context.Context, in *pb.ListReq, opts ...grpc.CallOption) (*Charges, error)
 }
 
 type paymentsClient struct {
@@ -50,7 +51,7 @@ func (c *paymentsClient) RefundCharge(ctx context.Context, in *RefundReq, opts .
 	return out, nil
 }
 
-func (c *paymentsClient) Get(ctx context.Context, in *IDs, opts ...grpc.CallOption) (*Charges, error) {
+func (c *paymentsClient) Get(ctx context.Context, in *pb.UUIDs, opts ...grpc.CallOption) (*Charges, error) {
 	out := new(Charges)
 	err := c.cc.Invoke(ctx, "/payments.Payments/Get", in, out, opts...)
 	if err != nil {
@@ -59,7 +60,7 @@ func (c *paymentsClient) Get(ctx context.Context, in *IDs, opts ...grpc.CallOpti
 	return out, nil
 }
 
-func (c *paymentsClient) List(ctx context.Context, in *ListReq, opts ...grpc.CallOption) (*Charges, error) {
+func (c *paymentsClient) List(ctx context.Context, in *pb.ListReq, opts ...grpc.CallOption) (*Charges, error) {
 	out := new(Charges)
 	err := c.cc.Invoke(ctx, "/payments.Payments/List", in, out, opts...)
 	if err != nil {
@@ -74,8 +75,8 @@ func (c *paymentsClient) List(ctx context.Context, in *ListReq, opts ...grpc.Cal
 type PaymentsServer interface {
 	NewCharge(context.Context, *ChargeReq) (*Charge, error)
 	RefundCharge(context.Context, *RefundReq) (*Refund, error)
-	Get(context.Context, *IDs) (*Charges, error)
-	List(context.Context, *ListReq) (*Charges, error)
+	Get(context.Context, *pb.UUIDs) (*Charges, error)
+	List(context.Context, *pb.ListReq) (*Charges, error)
 	mustEmbedUnimplementedPaymentsServer()
 }
 
@@ -89,10 +90,10 @@ func (UnimplementedPaymentsServer) NewCharge(context.Context, *ChargeReq) (*Char
 func (UnimplementedPaymentsServer) RefundCharge(context.Context, *RefundReq) (*Refund, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RefundCharge not implemented")
 }
-func (UnimplementedPaymentsServer) Get(context.Context, *IDs) (*Charges, error) {
+func (UnimplementedPaymentsServer) Get(context.Context, *pb.UUIDs) (*Charges, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
 }
-func (UnimplementedPaymentsServer) List(context.Context, *ListReq) (*Charges, error) {
+func (UnimplementedPaymentsServer) List(context.Context, *pb.ListReq) (*Charges, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
 func (UnimplementedPaymentsServer) mustEmbedUnimplementedPaymentsServer() {}
@@ -145,7 +146,7 @@ func _Payments_RefundCharge_Handler(srv interface{}, ctx context.Context, dec fu
 }
 
 func _Payments_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(IDs)
+	in := new(pb.UUIDs)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -157,13 +158,13 @@ func _Payments_Get_Handler(srv interface{}, ctx context.Context, dec func(interf
 		FullMethod: "/payments.Payments/Get",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PaymentsServer).Get(ctx, req.(*IDs))
+		return srv.(PaymentsServer).Get(ctx, req.(*pb.UUIDs))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Payments_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListReq)
+	in := new(pb.ListReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -175,7 +176,7 @@ func _Payments_List_Handler(srv interface{}, ctx context.Context, dec func(inter
 		FullMethod: "/payments.Payments/List",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PaymentsServer).List(ctx, req.(*ListReq))
+		return srv.(PaymentsServer).List(ctx, req.(*pb.ListReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
