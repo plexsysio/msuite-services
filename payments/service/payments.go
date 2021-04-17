@@ -8,11 +8,10 @@ import (
 	msgs "github.com/aloknerurkar/msuite-services/common/pb"
 	"github.com/aloknerurkar/msuite-services/payments/pb"
 	"github.com/aloknerurkar/msuite-services/payments/providers"
+	"github.com/aloknerurkar/msuite-services/utils"
 	proto "github.com/golang/protobuf/proto"
 	logger "github.com/ipfs/go-log/v2"
 	"golang.org/x/net/context"
-	"math"
-	"sync"
 	"time"
 )
 
@@ -188,49 +187,29 @@ func (p *payments) Get(
 	ids *msgs.UUIDs,
 ) (retItems *pb.Charges, retErr error) {
 
-	ch := make(chan *chargeObj)
-	wg := sync.WaitGroup{}
-	retItems = &pb.Charges{}
-	retItems.Charges = []*pb.Charge{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-			case it, ok := <-ch:
-				if !ok {
-					return
-				}
-				retItems.Charges = append(retItems.Charges, it.Charge)
-			}
-		}
-	}()
-	fanout := math.Ceil(float64(len(ids.Vals)) / 1000.0)
-	for i := 0; i < int(fanout); i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			start := i * 1000
-			end := start + 1000
-			if start+1000 > (len(ids.Vals) - 1) {
-				end = len(ids.Vals) - 1
-			}
-			for _, v := range ids.Vals[start:end] {
-				c := &chargeObj{
-					&pb.Charge{
-						ChargeId: v,
-					},
-				}
-				err := p.dbP.Read(c)
-				if err != nil {
-					log.Errorf("Failed reading charge %s Err:%s", c.String(), err.Error())
-				} else {
-					ch <- c
-				}
-			}
-		}()
+	items := make([]store.Item, len(ids.Vals))
+
+	err := utils.FanOutGet(
+		c,
+		p.dbP,
+		5,
+		ids.Vals,
+		func(id string) store.Item {
+			return &chargeObj{&pb.Charge{ChargeId: id}}
+		},
+		items,
+	)
+	if err != nil {
+		log.Errorf("FanOutGetHelper failed Err:%s", err.Error())
+		retErr = app_errors.ErrInternal("Failed listing items")
+		return
 	}
-	wg.Wait()
+
+	retItems = new(pb.Charges)
+	retItems.Charges = make([]*pb.Charge, len(items))
+	for i, v := range items {
+		retItems.Charges[i] = v.(*chargeObj).Charge
+	}
 	return
 }
 

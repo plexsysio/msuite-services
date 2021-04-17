@@ -247,7 +247,17 @@ func (s *authServer) Verify(
 			Username: verify.Creds.Username,
 		},
 	}
-	err := s.dbP.Read(usrObj)
+
+	unlock, err := s.lckr.TryLock(c, usrObj.LockString(), DefaultTimeout)
+	if err != nil {
+		retErr = app_errors.ErrInternal("Internal server error.")
+		log.Errorf("Failed to get lock on user %s. SecErr:%s", usrObj.GetId(),
+			err.Error())
+		return
+	}
+	defer unlock()
+
+	err = s.dbP.Read(usrObj)
 	if err != nil {
 		retErr = app_errors.ErrInternal("Failed verifying user entry.")
 		log.Errorf("Failed to verify user SecErr:%s", err.Error())

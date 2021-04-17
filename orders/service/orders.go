@@ -1,36 +1,30 @@
 package rpc_service
 
 import (
+	"context"
 	"errors"
-	logger "github.com/ipfs/go-log"
-	"gitlab.com/go-msuite/app-errors"
-	helper "gitlab.com/go-msuite/common/go-common"
-	msgs "gitlab.com/go-msuite/common/pb"
-	"gitlab.com/go-msuite/configurator/config_service/grpc_server"
-	"gitlab.com/go-msuite/locker"
-	Payments "gitlab.com/go-msuite/payments/pb"
-	"gitlab.com/go-msuite/store"
-	storeItem "gitlab.com/go-msuite/store/item"
-	Inventory "gitlab.com/trainer/inventory/pb"
-	Orders "gitlab.com/trainer/orders/pb"
-	"golang.org/x/net/context"
-	"sync/atomic"
 	"time"
-)
 
-var log = logger.Logger("orders")
+	"github.com/SWRMLabs/ss-store"
+	"github.com/aloknerurkar/dLocker"
+	"github.com/aloknerurkar/go-msuite/lib"
+	"github.com/aloknerurkar/msuite-services/app_errors"
+	msgs "github.com/aloknerurkar/msuite-services/common/pb"
+	inv "github.com/aloknerurkar/msuite-services/inventory/pb"
+	"github.com/aloknerurkar/msuite-services/orders/pb"
+	pmnts "github.com/aloknerurkar/msuite-services/payments/pb"
+	"github.com/aloknerurkar/msuite-services/utils"
+	proto "github.com/golang/protobuf/proto"
+	logger "github.com/ipfs/go-log/v2"
+)
 
 var (
-	req_id   int64         = 1
 	orderTTL time.Duration = time.Minute * 5
+	log                    = logger.Logger("orders")
 )
 
-func getNextId() int64 {
-	return atomic.AddInt64(&req_id, 1)
-}
-
 type orderItem struct {
-	*Orders.Item
+	*pb.Item
 }
 
 func (l *orderItem) GetNamespace() string { return "orders" }
@@ -41,17 +35,53 @@ func (l *orderItem) SetCreated(i int64) { l.Created = i }
 
 func (l *orderItem) SetUpdated(i int64) { l.Updated = i }
 
+func (l *orderItem) Marshal() ([]byte, error) {
+	return proto.Marshal(l.Item)
+}
+
+func (l *orderItem) Unmarshal(buf []byte) error {
+	if l.Item == nil {
+		l.Item = &pb.Item{}
+	}
+	return proto.Unmarshal(buf, l.Item)
+}
+
+func (l *orderItem) LockString() string {
+	return "/" + l.GetNamespace() + "/" + l.GetId()
+}
+
+func (l *orderItem) Factory() store.SerializedItem {
+	return &orderItem{}
+}
+
 type inventoryItem struct {
-	*Inventory.Item
+	*inv.Item
 }
 
 func (l *inventoryItem) GetNamespace() string { return "inventory" }
 
+func (l *inventoryItem) SetCreated(i int64) { l.Created = i }
+
 func (l *inventoryItem) SetUpdated(i int64) { l.Updated = i }
 
+func (l *inventoryItem) Marshal() ([]byte, error) {
+	return proto.Marshal(l.Item)
+}
+
+func (l *inventoryItem) Unmarshal(buf []byte) error {
+	if l.Item == nil {
+		l.Item = &inv.Item{}
+	}
+	return proto.Unmarshal(buf, l.Item)
+}
+
+func (l *inventoryItem) LockString() string {
+	return "/" + l.GetNamespace() + "/" + l.GetId()
+}
+
 type lockedOrderItem struct {
-	Item   *Inventory.Item
-	Unlock func() error
+	Item   *inv.Item
+	Unlock func()
 	Update func() error
 }
 
@@ -59,31 +89,36 @@ type updateFn func() error
 type unlockFn func() error
 
 type orders struct {
-	baseSrv grpc_server.BaseGrpcService
-	dbP     store.Store
-	lckr    locker.Locker
+	pb.UnimplementedOrdersServer
+	dbP  store.Store
+	lckr dLocker.DLocker
+	rpc  msuite.GRPC
 }
 
-var InitFn grpc_server.RPCInitFn = Init
-
-var DB = "redis"
-var LOCKER = "zookeeper"
-
-func Init(base grpc_server.BaseGrpcService) error {
-
-	if base.GetDb(DB) == nil || base.GetLocker(LOCKER) == nil {
-		return errors.New("Incomplete config for orders service")
+func New(svc msuite.Service) error {
+	ndApi, err := svc.Node()
+	if err != nil {
+		return err
 	}
-	Orders.RegisterOrdersServer(base.GetRPCServer(), &orders{
-		baseSrv: base,
-		dbP:     base.GetDb(DB),
-		lckr:    base.GetLocker(LOCKER),
-	})
+	grpcApi, err := svc.GRPC()
+	if err != nil {
+		return err
+	}
+	lckrApi, err := svc.Locker()
+	if err != nil {
+		return err
+	}
+	oSvc := &orders{
+		dbP:  ndApi.Storage(),
+		lckr: lckrApi,
+		rpc:  grpcApi,
+	}
+	pb.RegisterOrdersServer(grpcApi.Server(), oSvc)
 	return nil
 }
 
-func isPayable(order *Orders.Item) error {
-	if order.Status != Orders.Item_CREATED {
+func isPayable(order *pb.Item) error {
+	if order.Status != pb.Item_CREATED {
 		return errors.New("Incorrect order state")
 	}
 
@@ -97,25 +132,25 @@ func isPayable(order *Orders.Item) error {
 	return nil
 }
 
-func isReturnable(order *Orders.Item) error {
-	if order.Status != Orders.Item_PAID && order.Status != Orders.Item_COMPLETED &&
-		order.Status != Orders.Item_CANCELLED {
+func isReturnable(order *pb.Item) error {
+	if order.Status != pb.Item_PAID && order.Status != pb.Item_COMPLETED &&
+		order.Status != pb.Item_CANCELLED {
 		return errors.New("Incorrect order state")
 	}
 	return nil
 }
 
-func (o *orders) updateOrder(order *Orders.Item, item *Orders.NewOrderReq) error {
+func (o *orders) updateOrder(ctx context.Context, order *pb.Item, item *pb.NewOrderReq) error {
 
-	orderItems := make([]*Orders.OrderItem, 0)
+	orderItems := make([]*pb.OrderItem, 0)
 
-	conn, done, err := o.baseSrv.GetClientConn("inventory")
+	conn, err := o.rpc.Client(ctx, "inventory")
 	if err != nil {
 		return err
 	}
-	defer done()
+	defer conn.Close()
 
-	invSvc := Inventory.NewInventoryClient(conn)
+	invSvc := inv.NewInventoryClient(conn)
 
 	req := &msgs.UUIDs{Vals: []string{item.ItemId}}
 	invItem, err := invSvc.Get(context.Background(), req)
@@ -142,19 +177,19 @@ func (o *orders) updateOrder(order *Orders.Item, item *Orders.NewOrderReq) error
 
 	var prodCost int64
 	prodCost = item.Rate.Amount
-	orderItems = append(orderItems, &Orders.OrderItem{
-		Type: Orders.OrderItem_INVENTORY, Amount: prodCost, ParentId: item.ItemId})
+	orderItems = append(orderItems, &pb.OrderItem{
+		Type: pb.OrderItem_INVENTORY, Amount: prodCost, ParentId: item.ItemId})
 
 	var metaCost, discountCost, taxCost int64
 	for _, v := range item.Items {
-		if v.Type == Orders.OrderItem_INSURANCE {
+		if v.Type == pb.OrderItem_INSURANCE {
 			metaCost += 1
 		}
 		// Going ahead we need to check if discount is applicable
-		if v.Type == Orders.OrderItem_DISCOUNT {
+		if v.Type == pb.OrderItem_DISCOUNT {
 			discountCost += -1
 		}
-		if v.Type == Orders.OrderItem_TAX {
+		if v.Type == pb.OrderItem_TAX {
 			taxCost += 1
 		}
 	}
@@ -163,13 +198,13 @@ func (o *orders) updateOrder(order *Orders.Item, item *Orders.NewOrderReq) error
 	return nil
 }
 
-func (o *orders) getLockedOrderItem(ord *Orders.Item) (*lockedOrderItem, error) {
+func (o *orders) getLockedOrderItem(ctx context.Context, ord *pb.Item) (*lockedOrderItem, error) {
 
 	var invItem *inventoryItem
 	for _, v := range ord.Items {
-		if v.Type == Orders.OrderItem_INVENTORY {
+		if v.Type == pb.OrderItem_INVENTORY {
 			invItem = &inventoryItem{
-				Item: &Inventory.Item{
+				Item: &inv.Item{
 					Id: v.ParentId,
 				},
 			}
@@ -181,7 +216,7 @@ func (o *orders) getLockedOrderItem(ord *Orders.Item) (*lockedOrderItem, error) 
 		return nil, errors.New("Inventory item not found")
 	}
 
-	unlock, err := o.lckr.TryLock(invItem, locker.DefaultTimeout)
+	unlock, err := o.lckr.TryLock(ctx, invItem.LockString(), time.Second*3)
 	if err != nil {
 		return nil, err
 	}
@@ -204,19 +239,19 @@ func (o *orders) getLockedOrderItem(ord *Orders.Item) (*lockedOrderItem, error) 
 	}, nil
 }
 
-func (o *orders) NewOrder(c context.Context, newOrder *Orders.NewOrderReq) (retOrder *Orders.Item, retErr error) {
+func (o *orders) NewOrder(c context.Context, newOrder *pb.NewOrderReq) (retOrder *pb.Item, retErr error) {
 
 	ord := &orderItem{
-		&Orders.Item{
+		&pb.Item{
 			Amount:   0,
 			Currency: newOrder.Rate.Currency,
-			Status:   Orders.Item_CREATED,
+			Status:   pb.Item_CREATED,
 			Email:    newOrder.Email,
 			UserId:   newOrder.UserId,
 		},
 	}
 
-	err := o.updateOrder(ord.Item, newOrder)
+	err := o.updateOrder(c, ord.Item, newOrder)
 	if err != nil {
 		log.Errorf("Unable to update Order %v with %v. Err:%s", ord, newOrder,
 			err.Error())
@@ -236,11 +271,17 @@ func (o *orders) NewOrder(c context.Context, newOrder *Orders.NewOrderReq) (retO
 	return
 }
 
-func (o *orders) PayOrder(c context.Context, payOrder *Orders.PayOrderReq) (retOrder *Orders.Item, retErr error) {
+func (o *orders) PayOrder(c context.Context, payOrder *pb.PayOrderReq) (retOrder *pb.Item, retErr error) {
 
-	ord := &orderItem{&Orders.Item{Id: payOrder.OrderId}}
+	if len(payOrder.Charges) > 1 {
+		log.Errorf("Multiple pay split not implemented")
+		retErr = app_errors.ErrUnimplemented("Multiple pay split not allowed.")
+		return
+	}
 
-	unlock, err := o.lckr.TryLock(ord, locker.DefaultTimeout)
+	ord := &orderItem{&pb.Item{Id: payOrder.OrderId}}
+
+	unlock, err := o.lckr.TryLock(c, ord.LockString(), time.Second*3)
 	if err != nil {
 		log.Errorf("Failed to lock order item %s Err:%s", payOrder.OrderId, err.Error())
 		retErr = app_errors.ErrResourceExhausted("Unable to lock order.")
@@ -262,7 +303,7 @@ func (o *orders) PayOrder(c context.Context, payOrder *Orders.PayOrderReq) (retO
 		return
 	}
 
-	item, err := o.getLockedOrderItem(ord.Item)
+	item, err := o.getLockedOrderItem(c, ord.Item)
 	if err != nil {
 		log.Errorf("Failed to lock order item Err:%s", err)
 		retErr = app_errors.ErrInternal("Failed to lock order item")
@@ -270,22 +311,7 @@ func (o *orders) PayOrder(c context.Context, payOrder *Orders.PayOrderReq) (retO
 	}
 	defer item.Unlock()
 
-	paymentsConn, done, err := o.baseSrv.GetClientConn("payments")
-	if err != nil {
-		log.Errorf("Failed to get connection to payment service Err: %s", err.Error())
-		retErr = app_errors.ErrInternal("Failed getting connection.")
-		return
-	}
-	defer done()
-	paymentsSvc := Payments.NewPaymentsClient(paymentsConn)
-
-	if len(payOrder.Charges) > 1 {
-		log.Errorf("Multiple pay split not implemented")
-		retErr = app_errors.ErrUnimplemented("Multiple pay split not allowed.")
-		return
-	}
-
-	req := &Payments.ChargeReq{
+	req := &pmnts.ChargeReq{
 		Provider:  payOrder.Charges[0].Provider,
 		Amount:    ord.Amount,
 		Currency:  ord.Currency,
@@ -294,18 +320,28 @@ func (o *orders) PayOrder(c context.Context, payOrder *Orders.PayOrderReq) (retO
 	}
 	switch {
 	case len(payOrder.Charges[0].GetUserId()) > 0:
-		req.Source = &Payments.ChargeReq_UserId{
+		req.Source = &pmnts.ChargeReq_UserId{
 			UserId: payOrder.Charges[0].GetUserId(),
 		}
 	case payOrder.Charges[0].GetCard() != nil:
-		req.Source = &Payments.ChargeReq_Card{
+		req.Source = &pmnts.ChargeReq_Card{
 			Card: payOrder.Charges[0].GetCard(),
 		}
 	case len(payOrder.Charges[0].GetPaymentRef()) > 0:
-		req.Source = &Payments.ChargeReq_VoucherId{
+		req.Source = &pmnts.ChargeReq_VoucherId{
 			VoucherId: payOrder.Charges[0].GetPaymentRef(),
 		}
 	}
+
+	paymentsConn, err := o.rpc.Client(c, "payments")
+	if err != nil {
+		log.Errorf("Failed to get connection to payment service Err: %s", err.Error())
+		retErr = app_errors.ErrInternal("Failed getting connection.")
+		return
+	}
+	defer paymentsConn.Close()
+
+	paymentsSvc := pmnts.NewPaymentsClient(paymentsConn)
 
 	charge, err := paymentsSvc.NewCharge(context.Background(), req)
 	if err != nil {
@@ -315,13 +351,13 @@ func (o *orders) PayOrder(c context.Context, payOrder *Orders.PayOrderReq) (retO
 	}
 
 	ord.PaymentId = charge.ChargeId
-	ord.Status = Orders.Item_PAID
+	ord.Status = pb.Item_PAID
 
 	// This should be done with retry
 	err = o.dbP.Update(ord)
 	if err != nil {
-		r, e := paymentsSvc.RefundCharge(context.Background(), &Payments.RefundReq{
-			Type:     Payments.Refund_PROVIDER_FAILURE,
+		r, e := paymentsSvc.RefundCharge(context.Background(), &pmnts.RefundReq{
+			Type:     pmnts.Refund_PROVIDER_FAILURE,
 			Amount:   ord.Amount,
 			Currency: ord.Currency,
 			ChargeId: charge.ChargeId,
@@ -350,11 +386,11 @@ func (o *orders) PayOrder(c context.Context, payOrder *Orders.PayOrderReq) (retO
 	return
 }
 
-func (o *orders) ReturnOrder(c context.Context, orderId *msgs.UUID) (retOrder *Orders.Item, retErr error) {
+func (o *orders) ReturnOrder(c context.Context, orderId *msgs.UUID) (retOrder *pb.Item, retErr error) {
 
-	ord := &orderItem{&Orders.Item{Id: orderId.Val}}
+	ord := &orderItem{&pb.Item{Id: orderId.Val}}
 
-	unlock, err := o.lckr.TryLock(ord, locker.DefaultTimeout)
+	unlock, err := o.lckr.TryLock(c, ord.LockString(), time.Second*3)
 	if err != nil {
 		log.Errorf("Failed to lock order item Err:%s", err.Error())
 		retErr = app_errors.ErrResourceExhausted("Unable to lock order.")
@@ -376,7 +412,7 @@ func (o *orders) ReturnOrder(c context.Context, orderId *msgs.UUID) (retOrder *O
 		return
 	}
 
-	item, err := o.getLockedOrderItem(ord.Item)
+	item, err := o.getLockedOrderItem(c, ord.Item)
 	if err != nil {
 		log.Errorf("Failed to lock inventory item Err:%s", err.Error())
 		retErr = app_errors.ErrInternal("Failed to lock inventory item")
@@ -384,17 +420,18 @@ func (o *orders) ReturnOrder(c context.Context, orderId *msgs.UUID) (retOrder *O
 	}
 	defer item.Unlock()
 
-	paymentsConn, done, err := o.baseSrv.GetClientConn("payments")
+	paymentsConn, err := o.rpc.Client(c, "payments")
 	if err != nil {
 		log.Errorf("Failed to get connection to Payment svc Err:%s", err.Error())
 		retErr = app_errors.ErrInternal("Failed getting connection.")
 		return
 	}
-	defer done()
-	paymentsSvc := Payments.NewPaymentsClient(paymentsConn)
+	defer paymentsConn.Close()
 
-	r, err := paymentsSvc.RefundCharge(context.Background(), &Payments.RefundReq{
-		Type:     Payments.Refund_USER_REQUESTED,
+	paymentsSvc := pmnts.NewPaymentsClient(paymentsConn)
+
+	r, err := paymentsSvc.RefundCharge(context.Background(), &pmnts.RefundReq{
+		Type:     pmnts.Refund_USER_REQUESTED,
 		Amount:   ord.Amount,
 		Currency: ord.Currency,
 		ChargeId: ord.PaymentId,
@@ -423,51 +460,51 @@ func (o *orders) ReturnOrder(c context.Context, orderId *msgs.UUID) (retOrder *O
 	return
 }
 
-func (o *orders) Get(c context.Context, ids *msgs.UUIDs) (retItems *Orders.Items, retErr error) {
+func (o *orders) Get(c context.Context, ids *msgs.UUIDs) (retItems *pb.Items, retErr error) {
 
-	items := make([]storeItem.Item, len(ids.Vals))
+	items := make([]store.Item, len(ids.Vals))
 
-	err := helper.ParallelGetHelper(c, ids, func(id string) storeItem.Item {
-		return &orderItem{&Orders.Item{Id: id}}
-	}, items, o.lckr, o.dbP)
+	err := utils.FanOutGet(
+		c,
+		o.dbP,
+		5,
+		ids.Vals,
+		func(id string) store.Item {
+			return &orderItem{&pb.Item{Id: id}}
+		},
+		items,
+	)
 	if err != nil {
-		log.Errorf("ParallelGetHelper failed Err:%s", err.Error())
-		retErr = app_errors.ErrInternal("Failed listing Orders items")
+		log.Errorf("FanOutGetHelper failed Err:%s", err.Error())
+		retErr = app_errors.ErrInternal("Failed listing items")
 		return
 	}
 
-	retItems = new(Orders.Items)
-	retItems.Items = make([]*Orders.Item, len(items))
+	retItems = new(pb.Items)
+	retItems.Items = make([]*pb.Item, len(items))
 	for i, v := range items {
 		retItems.Items[i] = v.(*orderItem).Item
 	}
 	return
 }
 
-func (o *orders) List(c context.Context, req *msgs.ListReq) (retItems *Orders.Items, retErr error) {
+func (o *orders) List(c context.Context, req *msgs.ListReq) (retItems *pb.Items, retErr error) {
 
-	items := make([]storeItem.Item, req.Limit)
-	for i := range items {
-		items[i] = &orderItem{
-			Item: new(Orders.Item),
-		}
-	}
-
-	listOpt := storeItem.ListOpt{
+	listOpt := store.ListOpt{
 		Page:  req.Page,
 		Limit: req.Limit,
 	}
 
-	count, err := o.dbP.List(items, listOpt)
+	items, err := o.dbP.List(&orderItem{}, listOpt)
 	if err != nil {
 		log.Errorf("Failed listing orders items Err:%s", err.Error())
 		retErr = app_errors.ErrInternal("Failed to list orders items.")
 		return
 	}
 
-	retItems = new(Orders.Items)
-	retItems.Items = make([]*Orders.Item, count)
-	for i := 0; i < count; i++ {
+	retItems = new(pb.Items)
+	retItems.Items = make([]*pb.Item, len(items))
+	for i := 0; i < len(items); i++ {
 		retItems.Items[i] = items[i].(*orderItem).Item
 	}
 	return

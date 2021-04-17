@@ -9,15 +9,17 @@ import "payments/pb/payments.proto";
 import "common/pb/annotations.proto";
 
 message Rate {
-    enum RateType {
-        RATE_RESERVED = 0;    // Not to be used.
-        MONTHLY = 1;
-        QUARTERLY = 2;
-        SEMI_ANNUALLY = 3;
-        ANNUALLY = 4;
-        PER_ITEM = 5;
+    enum Type {
+        Reserved = 0;    // Not to be used.
+        Weekly = 1;
+        Fortnightly = 2;
+        Monthly = 3;
+        Quarterly = 4;
+        SemiAnnually = 5;
+        Annually = 6;
+        PerItem = 7;
     }
-    RateType type = 1;
+    Type type = 1;
     int64 amount = 2;
     payments.Currency currency = 3;
 }
@@ -47,12 +49,13 @@ message Items {
 }
 
 message UpdateReq {
-    enum UpdateAttr {
-        NEW = 0;
-        COUNT = 1;
-        RATE = 2;
-        ACTIVE = 4;
-        METADATA = 8;
+    enum Attr {
+        New = 0;
+        Full = 1;
+        Count = 2;
+        Rate = 4;
+        Active = 8;
+        Metadata = 16;
     }
     int32 map = 1;
     Item item = 2;

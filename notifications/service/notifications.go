@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"math"
-	"sync"
 	"time"
 
 	"github.com/SWRMLabs/ss-store"
@@ -14,6 +12,7 @@ import (
 	msgs "github.com/aloknerurkar/msuite-services/common/pb"
 	"github.com/aloknerurkar/msuite-services/notifications/pb"
 	"github.com/aloknerurkar/msuite-services/notifications/providers"
+	"github.com/aloknerurkar/msuite-services/utils"
 	proto "github.com/golang/protobuf/proto"
 	logger "github.com/ipfs/go-log/v2"
 )
@@ -218,49 +217,29 @@ func (s *notifications) Get(
 	ids *msgs.UUIDs,
 ) (retItems *pb.NotificationList, retErr error) {
 
-	ch := make(chan *notifObj)
-	wg := sync.WaitGroup{}
-	retItems = &pb.NotificationList{}
-	retItems.Items = []*pb.Notification{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-			case it, ok := <-ch:
-				if !ok {
-					return
-				}
-				retItems.Items = append(retItems.Items, it.Notification)
-			}
-		}
-	}()
-	fanout := math.Ceil(float64(len(ids.Vals)) / 1000.0)
-	for i := 0; i < int(fanout); i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			start := i * 1000
-			end := start + 1000
-			if start+1000 > (len(ids.Vals) - 1) {
-				end = len(ids.Vals) - 1
-			}
-			for _, v := range ids.Vals[start:end] {
-				n := &notifObj{
-					&pb.Notification{
-						Id: v,
-					},
-				}
-				err := s.dbP.Read(n)
-				if err != nil {
-					log.Errorf("Failed reading notification %s Err:%s", n.String(), err.Error())
-				} else {
-					ch <- n
-				}
-			}
-		}()
+	items := make([]store.Item, len(ids.Vals))
+
+	err := utils.FanOutGet(
+		c,
+		s.dbP,
+		5,
+		ids.Vals,
+		func(id string) store.Item {
+			return &notifObj{&pb.Notification{Id: id}}
+		},
+		items,
+	)
+	if err != nil {
+		log.Errorf("FanOutGetHelper failed Err:%s", err.Error())
+		retErr = app_errors.ErrInternal("Failed listing items")
+		return
 	}
-	wg.Wait()
+
+	retItems = new(pb.NotificationList)
+	retItems.Items = make([]*pb.Notification, len(items))
+	for i, v := range items {
+		retItems.Items[i] = v.(*notifObj).Notification
+	}
 	return
 }
 
