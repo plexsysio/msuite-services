@@ -4,8 +4,6 @@ go 1.14
 
 require (
 	github.com/SWRMLabs/ss-store v0.0.4
-	github.com/plexsysio/dLocker v0.0.1
-	github.com/plexsysio/go-msuite v0.0.1
 	github.com/anachronistic/apns v0.0.0-20151129191123-91763352f7bf
 	github.com/golang/protobuf v1.4.3
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.3.0
@@ -15,6 +13,8 @@ require (
 	github.com/ipfs/go-log/v2 v2.1.1
 	github.com/maddevsio/fcm v1.0.4
 	github.com/messagebird/go-rest-api v5.3.0+incompatible
+	github.com/plexsysio/dLocker v0.0.2
+	github.com/plexsysio/go-msuite v0.0.1
 	github.com/razorpay/razorpay-go v0.0.0-20201204135735-096d3be7d2df
 	go.uber.org/fx v1.13.1 // indirect
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
