@@ -1,7 +1,7 @@
 package android
 
 import (
-	Notifications "github.com/aloknerurkar/msuite-services/notifications/pb"
+	Notifications "github.com/plexsysio/msuite-services/notifications/pb"
 	logger "github.com/ipfs/go-log/v2"
 	"github.com/maddevsio/fcm"
 )

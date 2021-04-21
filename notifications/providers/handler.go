@@ -2,11 +2,11 @@ package providers
 
 import (
 	"errors"
-	"github.com/aloknerurkar/msuite-services/notifications/pb"
-	"github.com/aloknerurkar/msuite-services/notifications/providers/android"
-	"github.com/aloknerurkar/msuite-services/notifications/providers/email"
-	apns "github.com/aloknerurkar/msuite-services/notifications/providers/ios"
-	"github.com/aloknerurkar/msuite-services/notifications/providers/sms"
+	"github.com/plexsysio/msuite-services/notifications/pb"
+	"github.com/plexsysio/msuite-services/notifications/providers/android"
+	"github.com/plexsysio/msuite-services/notifications/providers/email"
+	apns "github.com/plexsysio/msuite-services/notifications/providers/ios"
+	"github.com/plexsysio/msuite-services/notifications/providers/sms"
 )
 
 type Provider interface {

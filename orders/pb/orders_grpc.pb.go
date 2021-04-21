@@ -4,7 +4,7 @@ package pb
 
 import (
 	context "context"
-	pb "github.com/aloknerurkar/msuite-services/common/pb"
+	pb "github.com/plexsysio/msuite-services/common/pb"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"

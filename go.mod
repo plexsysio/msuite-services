@@ -1,11 +1,11 @@
-module github.com/aloknerurkar/msuite-services
+module github.com/plexsysio/msuite-services
 
 go 1.14
 
 require (
 	github.com/SWRMLabs/ss-store v0.0.4
-	github.com/aloknerurkar/dLocker v0.0.1
-	github.com/aloknerurkar/go-msuite v0.0.1
+	github.com/plexsysio/dLocker v0.0.1
+	github.com/plexsysio/go-msuite v0.0.1
 	github.com/anachronistic/apns v0.0.0-20151129191123-91763352f7bf
 	github.com/golang/protobuf v1.4.3
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.3.0
@@ -27,4 +27,4 @@ require (
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 )
 
-replace github.com/aloknerurkar/go-msuite => ../go-msuite
+replace github.com/plexsysio/go-msuite => ../go-msuite

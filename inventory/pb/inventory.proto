@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/aloknerurkar/msuite-services/inventory/pb";
+option go_package = "github.com/plexsysio/msuite-services/inventory/pb";
 
 package inventory;
 

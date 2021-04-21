@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	Notifications "github.com/aloknerurkar/msuite-services/notifications/pb"
+	Notifications "github.com/plexsysio/msuite-services/notifications/pb"
 )
 
 var ApiKey = "HLYWprzbMaRiVXa3rwqKzyTIY"

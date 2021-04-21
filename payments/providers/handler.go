@@ -2,8 +2,8 @@ package providers
 
 import (
 	"errors"
-	"github.com/aloknerurkar/msuite-services/payments/pb"
-	"github.com/aloknerurkar/msuite-services/payments/providers/razorpay_frontend"
+	"github.com/plexsysio/msuite-services/payments/pb"
+	"github.com/plexsysio/msuite-services/payments/providers/razorpay_frontend"
 )
 
 type Provider interface {

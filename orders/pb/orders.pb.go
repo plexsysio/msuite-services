@@ -7,9 +7,9 @@
 package pb
 
 import (
-	pb1 "github.com/aloknerurkar/msuite-services/common/pb"
-	pb2 "github.com/aloknerurkar/msuite-services/inventory/pb"
-	pb "github.com/aloknerurkar/msuite-services/payments/pb"
+	pb1 "github.com/plexsysio/msuite-services/common/pb"
+	pb2 "github.com/plexsysio/msuite-services/inventory/pb"
+	pb "github.com/plexsysio/msuite-services/payments/pb"
 	proto "github.com/golang/protobuf/proto"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"

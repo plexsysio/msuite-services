@@ -2,7 +2,7 @@ package razorpay
 
 import (
 	"fmt"
-	"github.com/aloknerurkar/msuite-services/payments/pb"
+	"github.com/plexsysio/msuite-services/payments/pb"
 	"github.com/razorpay/razorpay-go"
 	"time"
 )

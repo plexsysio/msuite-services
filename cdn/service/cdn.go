@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SWRMLabs/ss-store"
-	"github.com/aloknerurkar/go-msuite/lib"
+	"github.com/plexsysio/go-msuite/lib"
 	ipfslite "github.com/hsanjuan/ipfs-lite"
 	"github.com/ipfs/go-cid"
 	"net/http"

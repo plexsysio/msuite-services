@@ -1,7 +1,7 @@
 package sms
 
 import (
-	Notifications "github.com/aloknerurkar/msuite-services/notifications/pb"
+	Notifications "github.com/plexsysio/msuite-services/notifications/pb"
 	logger "github.com/ipfs/go-log/v2"
 	MessageBird "github.com/messagebird/go-rest-api"
 	Sms "github.com/messagebird/go-rest-api/sms"

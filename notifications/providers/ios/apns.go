@@ -1,7 +1,7 @@
 package apns
 
 import (
-	Notifications "github.com/aloknerurkar/msuite-services/notifications/pb"
+	Notifications "github.com/plexsysio/msuite-services/notifications/pb"
 	Apns "github.com/anachronistic/apns"
 	logger "github.com/ipfs/go-log/v2"
 )

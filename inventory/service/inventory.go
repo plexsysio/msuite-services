@@ -2,12 +2,12 @@ package rpc_service
 
 import (
 	"github.com/SWRMLabs/ss-store"
-	"github.com/aloknerurkar/dLocker"
-	"github.com/aloknerurkar/go-msuite/lib"
-	"github.com/aloknerurkar/msuite-services/app_errors"
-	msgs "github.com/aloknerurkar/msuite-services/common/pb"
-	"github.com/aloknerurkar/msuite-services/inventory/pb"
-	"github.com/aloknerurkar/msuite-services/utils"
+	"github.com/plexsysio/dLocker"
+	"github.com/plexsysio/go-msuite/lib"
+	"github.com/plexsysio/msuite-services/app_errors"
+	msgs "github.com/plexsysio/msuite-services/common/pb"
+	"github.com/plexsysio/msuite-services/inventory/pb"
+	"github.com/plexsysio/msuite-services/utils"
 	proto "github.com/golang/protobuf/proto"
 	logger "github.com/ipfs/go-log/v2"
 	"golang.org/x/net/context"
