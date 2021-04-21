@@ -6,10 +6,10 @@ package auth;
 import "common/pb/annotations.proto";
 
 enum LoginType {
-    NONE            = 0;
-    EMAIL           = 1;
-    MOBILE          = 2;
-    OAUTH_PROVIDER  = 3;
+    None            = 0;
+    Email           = 1;
+    Mobile          = 2;
+    OAuthProvider   = 3;
 }
 
 message AuthCredentials {

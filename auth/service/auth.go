@@ -198,14 +198,14 @@ func (s *authServer) Register(
 	// Random string. Will be a 20 char string in case of email and 6 digit OTP in case of mobile.
 	var ran_str string
 	switch creds.Type {
-	case pb.LoginType_EMAIL:
+	case pb.LoginType_Email:
 		ran_str = utils.RandStringBytes(20)
-	case pb.LoginType_MOBILE:
+	case pb.LoginType_Mobile:
 		totp := &otp.TOTP{
 			Length: OTP_LEN,
 		}
 		ran_str = totp.Get()
-	case pb.LoginType_OAUTH_PROVIDER:
+	case pb.LoginType_OAuthProvider:
 		fallthrough
 	default:
 		retErr = app_errors.ErrUnimplemented("Unsupported registration type.")
