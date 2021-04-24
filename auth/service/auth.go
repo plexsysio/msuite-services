@@ -1,12 +1,15 @@
 package service
 
 import (
-	"bytes"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
 	"github.com/SWRMLabs/ss-store"
+	"github.com/golang/protobuf/proto"
+	"github.com/hgfischer/go-otp"
+	logger "github.com/ipfs/go-log/v2"
 	"github.com/plexsysio/dLocker"
 	"github.com/plexsysio/go-msuite/lib"
 	"github.com/plexsysio/go-msuite/modules/auth"
@@ -14,9 +17,6 @@ import (
 	"github.com/plexsysio/msuite-services/app_errors"
 	"github.com/plexsysio/msuite-services/auth/pb"
 	"github.com/plexsysio/msuite-services/utils"
-	"github.com/golang/protobuf/proto"
-	"github.com/hgfischer/go-otp"
-	logger "github.com/ipfs/go-log/v2"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/net/context"
 )
@@ -107,6 +107,24 @@ func (u *verifiedUser) Unmarshal(buf []byte) error {
 		u.VerifiedUser = &pb.VerifiedUser{}
 	}
 	return proto.Unmarshal(buf, u.VerifiedUser)
+}
+
+type ForgotPasswordRequest struct {
+	Username     string
+	UsernameType string
+	TempPassword string
+}
+
+func (f *ForgotPasswordRequest) Topic() string {
+	return "UserForgotPassword"
+}
+
+func (f *ForgotPasswordRequest) Marshal() ([]byte, error) {
+	return json.Marshal(f)
+}
+
+func (f *ForgotPasswordRequest) Unmarshal(buf []byte) error {
+	return json.Unmarshal(buf, f)
 }
 
 type authServer struct {
@@ -275,6 +293,8 @@ func (s *authServer) Verify(
 	}
 	verifiedUsr := &verifiedUser{
 		&pb.VerifiedUser{
+			UserId:   usrObj.Type.String() + "/" + usrObj.Username,
+			Role:     "authenticated_write",
 			Username: usrObj.Username,
 			Type:     usrObj.Type,
 			Password: usrObj.Password,
@@ -441,22 +461,10 @@ func (s *authServer) ResetPassword(
 		log.Errorf("Error while parsing claims ERR:%s", err.Error())
 		return
 	}
-	userId, ok := claims.Mtdt["UserId"]
-	if !ok {
-		retErr = app_errors.ErrInternal("UserID missing in claims")
-		log.Errorf("Invalid claims, UserID missing %v", claims)
-		return
-	}
-	if updCreds.UserId != userId {
+	if updCreds.UserId != claims.ID {
 		retErr = app_errors.ErrUnauthenticated("Token invalid for request.")
 		log.Errorf("User ID mismatch in token and req. Token UID:%s ReqUID:%s",
 			updCreds.UserId, claims.ID)
-		return
-	}
-	hashedPass, err := bcrypt.GenerateFromPassword([]byte(updCreds.OldPassword), bcrypt.DefaultCost)
-	if err != nil {
-		retErr = app_errors.ErrInternal("Internal server error.")
-		log.Errorf("Failed to generate password hash. SecErr:%s", err.Error())
 		return
 	}
 	usrType, username, err := getUsernameTypeFromClaims(claims)
@@ -478,19 +486,19 @@ func (s *authServer) ResetPassword(
 		return
 	}
 	if usr.UseTempPwd {
-		if bytes.Compare(usr.TempPwd, hashedPass) != 0 {
+		if err = bcrypt.CompareHashAndPassword(usr.TempPwd, []byte(updCreds.OldPassword)); err != nil {
 			retErr = app_errors.ErrPermissionDenied("Temporary Password incorrect.")
-			log.Error("Temporary password doesnt match.")
+			log.Errorf("Temporary password doesnt match. SecErr:%v", err)
 			return
 		}
 	} else {
-		if bytes.Compare(usr.Password, hashedPass) != 0 {
+		if err = bcrypt.CompareHashAndPassword(usr.Password, []byte(updCreds.OldPassword)); err != nil {
 			retErr = app_errors.ErrPermissionDenied("Password incorrect.")
-			log.Error("Password doesnt match.")
+			log.Errorf("Password doesnt match. SecErr:%v", err)
 			return
 		}
 	}
-	hashedPass, err = bcrypt.GenerateFromPassword([]byte(updCreds.NewPassword), bcrypt.DefaultCost)
+	hashedPass, err := bcrypt.GenerateFromPassword([]byte(updCreds.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
 		retErr = app_errors.ErrInternal("Internal server error.")
 		log.Errorf("Failed to generate password hash. SecErr:%s", err.Error())
@@ -533,8 +541,8 @@ func (s *authServer) ForgotPassword(
 		log.Errorf("Username %s does not exists. SecErr:%s", usr.GetId(), err.Error())
 		return
 	}
-	temp_pwd := utils.RandStringBytes(10)
-	hashedPass, err := bcrypt.GenerateFromPassword([]byte(temp_pwd), bcrypt.DefaultCost)
+	tempPwd := utils.RandStringBytes(10)
+	hashedPass, err := bcrypt.GenerateFromPassword([]byte(tempPwd), bcrypt.DefaultCost)
 	if err != nil {
 		retErr = app_errors.ErrInternal("Internal server error.")
 		log.Errorf("Failed to generate password hash. SecErr:%s", err.Error())
@@ -548,6 +556,17 @@ func (s *authServer) ForgotPassword(
 		retErr = app_errors.ErrInternal("Internal server error.")
 		log.Errorf("Failed to update user. SecErr:%s", err.Error())
 		return
+	}
+	// Publish new forgotPasswordUser event. This can be used by other services
+	// to send notifications etc
+	forgotUser := &ForgotPasswordRequest{
+		Username:     usr.Username,
+		UsernameType: usr.Type.String(),
+		TempPassword: tempPwd,
+	}
+	err = s.ev.Broadcast(c, forgotUser)
+	if err != nil {
+		log.Warnf("Failed to broadcast user forgot password msg %v", forgotUser)
 	}
 	retEmp = &pb.AuthResponse{}
 	return
@@ -578,6 +597,7 @@ func (s *authServer) ReportUnauthorizedPwdChange(
 		return
 	}
 	usr.UseTempPwd = false
+	usr.TempPwd = []byte("")
 
 	err = s.dbP.Update(usr)
 	if err != nil {
