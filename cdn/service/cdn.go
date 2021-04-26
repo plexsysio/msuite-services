@@ -1,15 +1,22 @@
 package cdn
 
 import (
-	"context"
+	"archive/tar"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/SWRMLabs/ss-store"
-	"github.com/plexsysio/go-msuite/lib"
 	ipfslite "github.com/hsanjuan/ipfs-lite"
 	"github.com/ipfs/go-cid"
+	"github.com/plexsysio/go-msuite/lib"
+	"github.com/plexsysio/go-radix"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -45,32 +52,27 @@ type cdn struct {
 	port int
 }
 
-type FileObj struct {
-	Name     string
-	Size     int64
-	Cid      string
-	Uploader string
-	Acl      string
-	Created  int64
+type ManifestObj struct {
+	Cid string
 }
 
-func (f *FileObj) GetId() string {
+func (f *ManifestObj) GetId() string {
 	return f.Cid
 }
 
-func (f *FileObj) GetNamespace() string {
-	return "FileObj"
+func (f *ManifestObj) GetNamespace() string {
+	return "ManifestObj"
 }
 
-func (f *FileObj) Marshal() ([]byte, error) {
+func (f *ManifestObj) Marshal() ([]byte, error) {
 	return json.Marshal(f)
 }
 
-func (f *FileObj) Unmarshal(buf []byte) error {
+func (f *ManifestObj) Unmarshal(buf []byte) error {
 	return json.Unmarshal(buf, f)
 }
 
-func (f *FileObj) Factory() store.SerializedItem {
+func (f *ManifestObj) Factory() store.SerializedItem {
 	return f
 }
 
@@ -79,75 +81,319 @@ func errorHTML(msg string, w http.ResponseWriter) {
 	return
 }
 
-func (c *cdn) Put(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseMultipartForm(10 << 20)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		errorHTML("BadRequest: Failed parsing form", w)
-		return
-	}
-	file, handler, err := r.FormFile("file")
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		errorHTML("BadRequest: Failed parsing file", w)
-		return
-	}
-	defer file.Close()
+type FileMetadata struct {
+	Name        string
+	ContentType string
+	CID         string
+	Created     int64
+	Updated     int64
+}
 
-	ctx, _ := context.WithTimeout(context.Background(), DefaultTimeout)
-	nd, err := c.p.AddFile(ctx, file, nil)
+func (f *FileMetadata) Marshal() ([]byte, error) {
+	return json.Marshal(f)
+}
+
+func (f *FileMetadata) Unmarshal(buf []byte) error {
+	return json.Unmarshal(buf, f)
+}
+
+func (c *cdn) Put(w http.ResponseWriter, r *http.Request) {
+
+	contentType := r.Header.Get("Content-Type")
+	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		errorHTML("InternalError: "+err.Error(), w)
+		w.WriteHeader(http.StatusBadRequest)
+		errorHTML("BadRequest: Failed parsing Content-Type Err:"+err.Error(), w)
 		return
 	}
-	nf := &FileObj{
-		Name:    handler.Filename,
-		Size:    handler.Size,
-		Cid:     nd.Cid().String(),
-		Created: time.Now().Unix(),
+
+	var (
+		filesReader dirReader
+		indexFile   = &FileMetadata{}
+		addIndex    = false
+	)
+
+	switch mediaType {
+	case "application/tar":
+		filesReader = &tarReader{r: tar.NewReader(r.Body)}
+		indexFile.Name = r.Header.Get("index-document")
+	case "multipart/form-data":
+		filesReader = &multipartReader{r: multipart.NewReader(r.Body, params["boundary"])}
+		indexFile.Name = r.Header.Get("index-document")
+	default:
+		// get name from params
+		name := r.URL.Query().Get("name")
+		if name == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			errorHTML("Missing filename in params for single file upload", w)
+			return
+		}
+		filesReader = &singleFileReader{f: &FileInfo{
+			Name:        name,
+			Path:        name,
+			ContentType: mediaType,
+			Reader:      r.Body,
+		}}
+		indexFile.Name = name
 	}
-	err = c.st.Create(nf)
+
+	manifest := radix.New()
+
+	count := 0
+	for {
+		f, err := filesReader.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			errorHTML("Failed to get input file Err:"+err.Error(), w)
+			return
+		}
+
+		nd, err := c.p.AddFile(r.Context(), f.Reader, nil)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			errorHTML("InternalError: "+err.Error(), w)
+			return
+		}
+
+		manifest.Insert(f.Path, &FileMetadata{
+			Name:        f.Name,
+			ContentType: f.ContentType,
+			CID:         nd.Cid().String(),
+			Created:     time.Now().Unix(),
+		})
+
+		if f.Path == indexFile.Name {
+			indexFile.ContentType = f.ContentType
+			indexFile.CID = nd.Cid().String()
+			indexFile.Created = time.Now().Unix()
+			addIndex = true
+		}
+		count++
+	}
+
+	if count == 1 && indexFile.Name == "" {
+		for _, v := range manifest.ToMap() {
+			indexF, ok := v.(*FileMetadata)
+			if ok {
+				indexFile.Name = indexF.Name
+				indexFile.ContentType = indexF.ContentType
+				indexFile.CID = indexF.CID
+				indexFile.Created = indexF.Created
+				addIndex = true
+				break
+			}
+		}
+	}
+
+	if addIndex {
+		manifest.Insert("/", indexFile)
+	}
+
+	manifestBuf := new(bytes.Buffer)
+	err = manifest.Save(manifestBuf)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		errorHTML("InternalError: Failed creating metadata Err:"+err.Error(), w)
+		errorHTML("Failed saving manifest: "+err.Error(), w)
 		return
 	}
-	resp, err := json.Marshal(nf)
+
+	fmt.Printf("Manifest size %d\n", manifestBuf.Len())
+
+	mnode, err := c.p.AddFile(r.Context(), manifestBuf, nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		errorHTML("InternalError: Failed serializing response", w)
+		errorHTML("Failed storing manifest: "+err.Error(), w)
 		return
 	}
+
+	mObj := &ManifestObj{Cid: mnode.Cid().String()}
+	err = c.st.Create(mObj)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		errorHTML("Failed storing manifest object: "+err.Error(), w)
+		return
+	}
+
+	resp, err := mObj.Marshal()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		errorHTML("Failed sending response: "+err.Error(), w)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(resp)
 }
 
+type FileInfo struct {
+	Path        string
+	Name        string
+	ContentType string
+	Reader      io.Reader
+}
+
+type dirReader interface {
+	Next() (*FileInfo, error)
+}
+
+type singleFileReader struct {
+	f    *FileInfo
+	done bool
+}
+
+func (s *singleFileReader) Next() (*FileInfo, error) {
+	if s.done {
+		return nil, io.EOF
+	}
+	s.done = true
+	return s.f, nil
+}
+
+type tarReader struct {
+	r *tar.Reader
+}
+
+func (t *tarReader) Next() (*FileInfo, error) {
+	for {
+		fileHeader, err := t.r.Next()
+		if err != nil {
+			return nil, err
+		}
+
+		fileName := fileHeader.FileInfo().Name()
+		contentType := mime.TypeByExtension(filepath.Ext(fileHeader.Name))
+		filePath := filepath.Clean(fileHeader.Name)
+
+		if filePath == "." {
+			continue
+		}
+		if runtime.GOOS == "windows" {
+			// always use Unix path separator
+			filePath = filepath.ToSlash(filePath)
+		}
+		// only store regular files
+		if !fileHeader.FileInfo().Mode().IsRegular() {
+			continue
+		}
+
+		return &FileInfo{
+			Path:        filePath,
+			Name:        fileName,
+			ContentType: contentType,
+			Reader:      t.r,
+		}, nil
+	}
+}
+
+// multipart reader returns files added as a multipart form. We will ensure all the
+// part headers are passed correctly
+type multipartReader struct {
+	r *multipart.Reader
+}
+
+func (m *multipartReader) Next() (*FileInfo, error) {
+	part, err := m.r.NextPart()
+	if err != nil {
+		return nil, err
+	}
+
+	fileName := part.FileName()
+	if fileName == "" {
+		fileName = part.FormName()
+	}
+	if fileName == "" {
+		return nil, errors.New("filename missing")
+	}
+
+	contentType := part.Header.Get("Content-Type")
+	if contentType == "" {
+		return nil, errors.New("content-type missing")
+	}
+
+	if filepath.Dir(fileName) != "." {
+		return nil, errors.New("multipart upload supports only single directory")
+	}
+
+	return &FileInfo{
+		Path:        fileName,
+		Name:        fileName,
+		ContentType: contentType,
+		Reader:      part,
+	}, nil
+}
+
 func (c *cdn) Get(w http.ResponseWriter, r *http.Request) {
-	fileId := strings.TrimPrefix(r.URL.Path, "/v1/cdn/get/")
-	cid, err := cid.Decode(fileId)
+	var (
+		manifestID string
+		filePath   string
+		full       string
+	)
+	useIndex := false
+	_, err := fmt.Sscanf(r.URL.Path, "/v1/cdn/get/%s", &full)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		errorHTML("BadRequest: Failed parsing file ID Err:"+err.Error(), w)
 		return
 	}
-	f := &FileObj{
-		Cid: fileId,
+	splits := strings.Split(full, "/")
+	manifestID = splits[0]
+	if len(splits) > 1 {
+		filePath = strings.Join(splits[1:], "/")
 	}
-	err = c.st.Read(f)
+	if filePath == "" {
+		fmt.Println("Using index")
+		useIndex = true
+	}
+	mcid, err := cid.Decode(manifestID)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		errorHTML("NotFound: Failed getting file metadata Err:"+err.Error(), w)
-		return
 	}
-	ctx, _ := context.WithTimeout(context.Background(), DefaultTimeout)
-	rdr, err := c.p.GetFile(ctx, cid)
+	mrdr, err := c.p.GetFile(r.Context(), mcid)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		errorHTML("InternalError: Failed reading file Err:"+err.Error(), w)
+		errorHTML("InternalError: Failed reading manifest file Err:"+err.Error(), w)
 		return
 	}
-	http.ServeContent(w, r, f.Name, time.Unix(f.Created, 0), rdr)
+	manifest, err := radix.Load(mrdr, func(_ string) radix.Exportable {
+		return &FileMetadata{}
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		errorHTML("InternalError: Failed loading manifest Err:"+err.Error(), w)
+		return
+	}
+	var (
+		ndInt interface{}
+		found bool
+	)
+	if useIndex {
+		ndInt, found = manifest.Get("/")
+	} else {
+		ndInt, found = manifest.Get(filePath)
+	}
+	if !found {
+		w.WriteHeader(http.StatusInternalServerError)
+		errorHTML("InternalError: Failed getting file to display", w)
+		return
+	}
+	f, ok := ndInt.(*FileMetadata)
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
+		errorHTML("InternalError: Incorrect file metadata", w)
+		return
+	}
+	fcid, err := cid.Decode(f.CID)
+	if err != nil {
+	}
+	frdr, err := c.p.GetFile(r.Context(), fcid)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		errorHTML("InternalError: Failed reading manifest file Err:"+err.Error(), w)
+		return
+	}
+	http.ServeContent(w, r, f.Name, time.Unix(f.Created, 0), frdr)
 }
 
 func (c *cdn) List(w http.ResponseWriter, r *http.Request) {
@@ -175,7 +421,7 @@ func (c *cdn) List(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	items, err := c.st.List(&FileObj{}, store.ListOpt{
+	items, err := c.st.List(&ManifestObj{}, store.ListOpt{
 		Page:  int64(pg),
 		Limit: int64(lim),
 	})
@@ -184,9 +430,9 @@ func (c *cdn) List(w http.ResponseWriter, r *http.Request) {
 		errorHTML("InternalError: Failed listing files Err:"+err.Error(), w)
 		return
 	}
-	retList := []*FileObj{}
+	retList := []*ManifestObj{}
 	for _, v := range items {
-		retList = append(retList, v.(*FileObj))
+		retList = append(retList, v.(*ManifestObj))
 	}
 	resp, err := json.Marshal(retList)
 	if err != nil {

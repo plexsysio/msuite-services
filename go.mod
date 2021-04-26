@@ -15,6 +15,7 @@ require (
 	github.com/messagebird/go-rest-api v5.3.0+incompatible
 	github.com/plexsysio/dLocker v0.0.2
 	github.com/plexsysio/go-msuite v0.0.1
+	github.com/plexsysio/go-radix v0.0.2
 	github.com/razorpay/razorpay-go v0.0.0-20201204135735-096d3be7d2df
 	go.uber.org/fx v1.13.1 // indirect
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
