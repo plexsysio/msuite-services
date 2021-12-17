@@ -1,0 +1,37 @@
+{{ template "header.html" . }}
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+<main class="form-signin">
+    <form name="submitform" method="post" action="/register">
+        <h1 class="h3 mb-3 fw-normal">Register</h1>
+
+        {{ template "messages.html" . }}
+
+        <div class="form-floating">
+            <input name="email" type="email" class="form-control" id="floatingInput" placeholder="name@example.com">
+            <label for="floatingInput">Email address</label>
+        </div>
+        <div class="form-floating">
+            <input name="password" type="password" class="form-control" id="floatingPassword" placeholder="Password">
+            <label for="floatingPassword">Password</label>
+        </div>
+
+        <button class="w-100 btn btn-lg btn-primary" type="submit">Register</button>
+
+        <p class="mt-5 mb-3 text-muted"><a href="/activate/resend">Request a new activation email</a></p>
+    </form>
+    <script>
+            $('[name="submitform"]').click(function (e) {
+                console.log("hello")
+                e.preventDefault(); 
+                $.ajax({
+                    url: "/auth/v1/register",
+                    type: "POST",
+                    data: {"customerId": $("#customerId").val()},
+                    success: function (result) {
+                        //do somthing here
+                    }
+                });
+            });
+    </script>
+</main>
+{{ template "footer.html" . }}

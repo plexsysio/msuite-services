@@ -2,13 +2,12 @@ package service_test
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	logger "github.com/ipfs/go-log/v2"
-	"github.com/plexsysio/go-msuite/lib"
+	"github.com/plexsysio/go-msuite"
 	"github.com/plexsysio/go-msuite/modules/events"
 	"github.com/plexsysio/msuite-services/auth/pb"
 	auth "github.com/plexsysio/msuite-services/auth/service"
@@ -54,14 +53,12 @@ func (u *userCreatedEvent) Unmarshal(buf []byte) error {
 }
 
 func TestAuthFlow(t *testing.T) {
-	defer os.RemoveAll("tmp")
-
 	logger.SetLogLevel("*", "Error")
 
 	svc, err := msuite.New(
-		msuite.WithRepositoryRoot("tmp"),
-		msuite.WithServiceName("Auth"),
+		msuite.WithService("Auth", auth.New),
 		msuite.WithJWT("dummysecret"),
+		msuite.WithGRPC(),
 		msuite.WithGRPCTCPListener(10000),
 		msuite.WithP2PPort(10001),
 		msuite.WithLocker("inmem", nil),
@@ -69,7 +66,6 @@ func TestAuthFlow(t *testing.T) {
 			"dummyresource": "admin",
 		}),
 	)
-	err = auth.New(svc)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,16 +5,16 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/SWRMLabs/ss-store"
-	"github.com/plexsysio/go-msuite/lib"
+	proto "github.com/golang/protobuf/proto"
+	logger "github.com/ipfs/go-log/v2"
+	"github.com/plexsysio/gkvstore"
+	"github.com/plexsysio/go-msuite/core"
 	"github.com/plexsysio/go-msuite/modules/events"
 	"github.com/plexsysio/msuite-services/app_errors"
 	msgs "github.com/plexsysio/msuite-services/common/pb"
 	"github.com/plexsysio/msuite-services/notifications/pb"
 	"github.com/plexsysio/msuite-services/notifications/providers"
-	"github.com/plexsysio/msuite-services/utils"
-	proto "github.com/golang/protobuf/proto"
-	logger "github.com/ipfs/go-log/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 var log = logger.Logger("notifications")
@@ -25,7 +25,9 @@ type subscriber struct {
 
 func (l *subscriber) GetNamespace() string { return "notif/sub" }
 
-func (l *subscriber) GetId() string { return l.UserId }
+func (l *subscriber) GetID() string { return l.UserId }
+
+func (l *subscriber) SetID(id string) { l.UserId = id }
 
 func (l *subscriber) Marshal() ([]byte, error) {
 	return proto.Marshal(l.SubscribeReq)
@@ -44,25 +46,38 @@ type notifObj struct {
 
 func (l *notifObj) GetNamespace() string { return "notif/obj" }
 
-func (l *notifObj) SetId(i string) { l.Id = i }
+func (l *notifObj) GetID() string { return l.Id }
+
+func (l *notifObj) SetID(i string) { l.Id = i }
 
 func (l *notifObj) SetCreated(i int64) { l.Created = i }
 
 func (l *notifObj) SetUpdated(i int64) { l.Updated = i }
 
-type sendReq struct {
+func (l *notifObj) Marshal() ([]byte, error) {
+	return proto.Marshal(l.Notification)
+}
+
+func (l *notifObj) Unmarshal(buf []byte) error {
+	if l.Notification == nil {
+		l.Notification = &pb.Notification{}
+	}
+	return proto.Unmarshal(buf, l.Notification)
+}
+
+type SendRequest struct {
 	*pb.SendReq
 }
 
-func (s *sendReq) Topic() string {
-	return "SendNotification"
+func (s *SendRequest) Topic() string {
+	return "SendRequest"
 }
 
-func (s *sendReq) Marshal() ([]byte, error) {
+func (s *SendRequest) Marshal() ([]byte, error) {
 	return proto.Marshal(s.SendReq)
 }
 
-func (s *sendReq) Unmarshal(buf []byte) error {
+func (s *SendRequest) Unmarshal(buf []byte) error {
 	if s.SendReq == nil {
 		s.SendReq = &pb.SendReq{}
 	}
@@ -88,67 +103,108 @@ func (s *UserNotification) Unmarshal(buf []byte) error {
 
 type notifications struct {
 	pb.UnimplementedNotificationsServer
-	dbP   store.Store
+	dbP   gkvstore.Store
 	pvdrs []providers.Provider
 	ev    events.Events
 }
 
-func New(svc msuite.Service) error {
-	ndApi, err := svc.Node()
-	if err != nil {
-		return err
-	}
-	evApi, err := svc.Events()
-	if err != nil {
-		return err
-	}
-	grpcApi, err := svc.GRPC()
-	if err != nil {
-		return err
-	}
+func New(svc core.Service) error {
 	providerCfg := []map[string]interface{}{}
 	if ok := svc.Repo().Config().Get("NotificationProviders", &providerCfg); !ok {
 		log.Warn("No notification providers configured")
 	}
 	pvdrs := []providers.Provider{}
+	var err error
 	if len(providerCfg) > 0 {
 		pvdrs, err = providers.NewProviders(providerCfg)
 		if err != nil {
 			return err
 		}
 	}
+
+	return newWithProviders(svc, pvdrs)
+}
+
+func newWithProviders(svc core.Service, pvdrs []providers.Provider) error {
+	evApi, err := svc.Events()
+	if err != nil {
+		return err
+	}
+
+	grpcApi, err := svc.GRPC()
+	if err != nil {
+		return err
+	}
+
+	store, err := svc.SharedStorage("notifications", nil)
+	if err != nil {
+		return err
+	}
+
 	nSvc := &notifications{
-		dbP:   ndApi.Storage(),
+		dbP:   store,
 		pvdrs: pvdrs,
 		ev:    evApi,
 	}
+
 	pb.RegisterNotificationsServer(grpcApi.Server(), nSvc)
+
 	evApi.RegisterHandler(func() events.Event {
-		return &sendReq{}
+		return &SendRequest{}
 	}, nSvc.handleSendMessage)
+
 	return nil
 }
 
-func (s *notifications) Subscribe(
-	c context.Context,
-	req *pb.SubscribeReq,
-) (resp *msgs.UUID, retErr error) {
+func (s *notifications) Subscribe(c context.Context, req *pb.SubscribeReq) (*msgs.UUID, error) {
 
-	err := s.dbP.Create(&subscriber{SubscribeReq: req})
-	if err != nil {
-		retErr = app_errors.ErrInternal("Unable to store newly created subscriber")
-		log.Errorf("Failed to get store User %v SecErr:%s", req, err.Error())
-		return
+	if len(req.Subscriptions) == 0 {
+		return nil, app_errors.ErrInvalidArg("no subscriptions provided")
 	}
-	resp = &msgs.UUID{Val: req.UserId}
-	log.Info("Created new subscriber %v", req)
-	return
+
+	if req.UserId == "" {
+		err := s.dbP.Create(c, &subscriber{SubscribeReq: req})
+		if err != nil {
+			log.Errorf("failed to store User %v SecErr:%v", req, err)
+			return nil, app_errors.ErrInternal("failed to store user %v", err)
+		}
+
+		log.Debugf("created new subscriber %v", req)
+	} else {
+		existingSub := &subscriber{SubscribeReq: &pb.SubscribeReq{UserId: req.UserId}}
+		err := s.dbP.Read(c, existingSub)
+		if err != nil {
+			log.Errorf("failed to get user %v, Err: %v", req, err)
+			return nil, app_errors.ErrInvalidArg("failed to find user %v", err)
+		}
+
+		for _, newSub := range req.Subscriptions {
+			found := false
+			for idx, oldSub := range existingSub.Subscriptions {
+				if oldSub.Mode == newSub.Mode {
+					existingSub.Subscriptions[idx].Identifier = newSub.Identifier
+					found = true
+					break
+				}
+			}
+			if !found {
+				existingSub.Subscriptions = append(existingSub.Subscriptions, newSub)
+			}
+		}
+
+		err = s.dbP.Update(c, existingSub)
+		if err != nil {
+			log.Errorf("failed updating user subscriptions %v", err)
+			return nil, app_errors.ErrInternal("failed to update user subs %v", err)
+		}
+
+		log.Debugf("updated existing subscriber %v", req)
+	}
+
+	return &msgs.UUID{Val: req.UserId}, nil
 }
 
-func (s *notifications) Send(
-	c context.Context,
-	req *pb.SendReq,
-) (resp *pb.Notification, retErr error) {
+func (s *notifications) Send(c context.Context, req *pb.SendReq) (*pb.Notification, error) {
 
 	supported := false
 	var selected providers.Provider
@@ -165,103 +221,147 @@ func (s *notifications) Send(
 		}
 	}
 	if !supported && req.Type != pb.NotificationType_PULL {
-		retErr = app_errors.ErrUnimplemented("Unsupported request")
-		log.Errorf("Notification provider unsupported Req:%s", req.String())
-		return
+		log.Errorf("notification provider unsupported Req:%s", req.String())
+		return nil, app_errors.ErrUnimplemented("unsupported notification provider")
 	}
+
 	if len(req.GetUserId()) > 0 {
 		sub := &subscriber{SubscribeReq: &pb.SubscribeReq{UserId: req.GetUserId()}}
-		err := s.dbP.Read(sub)
+
+		err := s.dbP.Read(c, sub)
 		if err != nil {
-			retErr = app_errors.ErrInvalidArg("User ID does not exist")
-			log.Errorf("Failed getting subscriber UUID:%s SecErr:%s", req.GetUserId(),
-				err.Error())
-			return
+			log.Errorf("failed getting subscriber UUID:%s SecErr:%v", req.GetUserId(), err)
+			return nil, app_errors.ErrInvalidArg("user does not exist")
 		}
+
 		for i := range sub.GetSubscriptions() {
 			if req.Type == sub.GetSubscriptions()[i].GetMode() {
 				req.GetData().To = sub.GetSubscriptions()[i].GetIdentifier()
 			}
 		}
 	}
+
+	var (
+		resp *pb.Notification
+		err  error
+	)
+
 	if len(req.GetData().To) > 0 {
-		resp, retErr = selected.Send(req)
-		if retErr != nil {
-			retErr = app_errors.ErrInternal("Failed sending notification")
-			log.Errorf("Provider failure SecErr:%s", retErr.Error())
-			return
+		resp, err = selected.Send(req)
+		if err != nil {
+			log.Errorf("provider failure SecErr:%v", err)
+			return nil, app_errors.ErrInternal("provider error %v", err)
 		}
 	} else if req.Type == pb.NotificationType_PULL && len(req.GetUserId()) > 0 {
-		log.Warningf("Unable to find any subscription for PULL. Saving message.")
+		log.Warnf("unable to find any subscription for PULL. Saving message.")
 		resp = &pb.Notification{
 			UserId: req.GetUserId(),
 			Type:   req.GetType(),
 			Data:   req.GetData(),
 		}
 	} else {
-		retErr = app_errors.ErrInvalidArg("Receiver not provided")
-		log.Errorf("Failed getting receiver info :%s", req.String())
-		return
+		log.Errorf("failed getting receiver info :%s", req.String())
+		return nil, app_errors.ErrInvalidArg("receiver not provided")
 	}
+
 	obj := &notifObj{Notification: resp}
-	retErr = s.dbP.Create(obj)
-	if retErr != nil {
-		retErr = app_errors.ErrInternal("Failed storing notification")
-		log.Errorf("Failed storing notification %v SecErr:%s", resp, retErr.Error())
+	err = s.dbP.Create(c, obj)
+	if err != nil {
+		log.Errorf("failed storing notification %v SecErr:%v", resp, err)
+		return nil, app_errors.ErrInternal("failed storing notification %v", err)
 	}
-	return
+
+	return resp, nil
 }
 
-func (s *notifications) Get(
-	c context.Context,
-	ids *msgs.UUIDs,
-) (retItems *pb.NotificationList, retErr error) {
+func (s *notifications) Get(c context.Context, ids *msgs.UUIDs) (*pb.NotificationList, error) {
 
-	items := make([]store.Item, len(ids.Vals))
+	// 5 parallel workers for Get
+	sem := make(chan struct{}, 5)
 
-	err := utils.FanOutGet(
-		c,
-		s.dbP,
-		5,
-		ids.Vals,
-		func(id string) store.Item {
-			return &notifObj{&pb.Notification{Id: id}}
-		},
-		items,
-	)
+	type res struct {
+		n   *notifObj
+		idx int
+		err error
+	}
+	resChan := make(chan res)
+
+	results := &pb.NotificationList{Items: make([]*pb.Notification, len(ids.Vals))}
+	eg, ctx := errgroup.WithContext(c)
+
+	// Collector
+	eg.Go(func() error {
+		count := 0
+		for r := range resChan {
+			if r.err != nil {
+				return r.err
+			}
+			results.Items[r.idx] = r.n.Notification
+			count++
+			if count == len(ids.Vals) {
+				break
+			}
+		}
+		return nil
+	})
+
+LOOP:
+	for i := range ids.Vals {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			break LOOP
+		}
+
+		idx := i
+
+		eg.Go(func() error {
+			defer func() { <-sem }()
+
+			it := &notifObj{&pb.Notification{Id: ids.Vals[idx]}}
+			err := s.dbP.Read(c, it)
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case resChan <- res{n: it, idx: idx, err: err}:
+			}
+			return nil
+		})
+	}
+
+	err := eg.Wait()
 	if err != nil {
-		log.Errorf("FanOutGetHelper failed Err:%s", err.Error())
-		retErr = app_errors.ErrInternal("Failed listing items")
-		return
+		log.Errorf("failed getting notifications %v", err)
+		return nil, err
 	}
 
-	retItems = new(pb.NotificationList)
-	retItems.Items = make([]*pb.Notification, len(items))
-	for i, v := range items {
-		retItems.Items[i] = v.(*notifObj).Notification
-	}
-	return
+	return results, nil
 }
 
 func (n *notifications) handleSendMessage(ev events.Event) {
-	msg, ok := ev.(*sendReq)
+	msg, ok := ev.(*SendRequest)
 	if !ok {
-		log.Errorf("Invalid notification object %v", ev)
+		log.Errorf("invalid notification object %v", ev)
 		return
 	}
-	cCtx, _ := context.WithTimeout(context.Background(), time.Second*15)
+
+	cCtx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	defer cancel()
+
 	resp, err := n.Send(cCtx, msg.SendReq)
 	if err != nil {
-		log.Errorf("Failed sending notification %v Err:%s", msg.SendReq, err.Error())
+		log.Errorf("failed sending notification %v Err:%v", msg.SendReq, err)
 		return
 	}
+
 	if len(msg.UserId) > 0 {
 		err = n.ev.Broadcast(cCtx, &UserNotification{
 			UserId:         msg.SendReq.UserId,
 			NotificationId: resp.Id,
 		})
 		if err != nil {
-			log.Errorf("Failed publishing new user notification event")
+			log.Errorf("failed publishing new user notification event Err:%v", err)
 		}
 	}
 	return

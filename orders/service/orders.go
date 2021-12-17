@@ -5,17 +5,17 @@ import (
 	"errors"
 	"time"
 
-	"github.com/SWRMLabs/ss-store"
+	store "github.com/SWRMLabs/ss-store"
+	proto "github.com/golang/protobuf/proto"
+	logger "github.com/ipfs/go-log/v2"
 	"github.com/plexsysio/dLocker"
-	"github.com/plexsysio/go-msuite/lib"
+	"github.com/plexsysio/go-msuite/core"
 	"github.com/plexsysio/msuite-services/app_errors"
 	msgs "github.com/plexsysio/msuite-services/common/pb"
 	inv "github.com/plexsysio/msuite-services/inventory/pb"
 	"github.com/plexsysio/msuite-services/orders/pb"
 	pmnts "github.com/plexsysio/msuite-services/payments/pb"
 	"github.com/plexsysio/msuite-services/utils"
-	proto "github.com/golang/protobuf/proto"
-	logger "github.com/ipfs/go-log/v2"
 )
 
 var (
@@ -92,10 +92,10 @@ type orders struct {
 	pb.UnimplementedOrdersServer
 	dbP  store.Store
 	lckr dLocker.DLocker
-	rpc  msuite.GRPC
+	rpc  core.GRPC
 }
 
-func New(svc msuite.Service) error {
+func New(svc core.Service) error {
 	ndApi, err := svc.Node()
 	if err != nil {
 		return err

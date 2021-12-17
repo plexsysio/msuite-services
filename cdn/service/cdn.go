@@ -6,11 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SWRMLabs/ss-store"
-	ipfslite "github.com/hsanjuan/ipfs-lite"
-	"github.com/ipfs/go-cid"
-	"github.com/plexsysio/go-msuite/lib"
-	"github.com/plexsysio/go-radix"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -20,11 +15,17 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	store "github.com/SWRMLabs/ss-store"
+	ipfslite "github.com/hsanjuan/ipfs-lite"
+	"github.com/ipfs/go-cid"
+	"github.com/plexsysio/go-msuite/core"
+	"github.com/plexsysio/go-radix"
 )
 
 var DefaultTimeout time.Duration = time.Second * 10
 
-func NewCDNService(svc msuite.Service) error {
+func NewCDNService(svc core.Service) error {
 	ndApi, err := svc.Node()
 	if err != nil {
 		return err

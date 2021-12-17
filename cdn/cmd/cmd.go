@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+
 	logger "github.com/ipfs/go-log/v2"
-	"github.com/plexsysio/go-msuite/lib"
-	"github.com/plexsysio/msuite-services/cdn/service"
+	"github.com/plexsysio/go-msuite"
+	cdn "github.com/plexsysio/msuite-services/cdn/service"
 )
 
 func main() {
