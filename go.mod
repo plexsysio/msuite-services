@@ -3,7 +3,6 @@ module github.com/plexsysio/msuite-services
 go 1.17
 
 require (
-	github.com/SWRMLabs/ss-store v0.0.4
 	github.com/anachronistic/apns v0.0.0-20151129191123-91763352f7bf
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.2
@@ -18,10 +17,10 @@ require (
 	github.com/plexsysio/gkvstore v0.0.0-20211204172721-e2f4fbfc6e4a
 	github.com/plexsysio/go-msuite v0.0.0-20211214121042-64cb5e7cc570
 	github.com/plexsysio/go-radix v0.0.2
-	github.com/razorpay/razorpay-go v0.0.0-20201204135735-096d3be7d2df
 	go.uber.org/fx v1.13.1 // indirect
 	golang.org/x/crypto v0.0.0-20211117183948-ae814b36b871
 	golang.org/x/net v0.0.0-20211123203042-d83791d6bcd9
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/genproto v0.0.0-20210602131652-f16073e35f0c
 	google.golang.org/grpc v1.42.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0
@@ -60,6 +59,7 @@ require (
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
@@ -211,7 +211,6 @@ require (
 	go.uber.org/zap v1.19.1 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
 	golang.org/x/mod v0.5.1 // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20211124211545-fe61309f8881 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/tools v0.1.7 // indirect

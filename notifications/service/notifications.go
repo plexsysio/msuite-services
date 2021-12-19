@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
 	proto "github.com/golang/protobuf/proto"
@@ -141,6 +143,11 @@ func newWithProviders(svc core.Service, pvdrs []providers.Provider) error {
 		return err
 	}
 
+	httpApi, err := svc.HTTP()
+	if err != nil {
+		return err
+	}
+
 	nSvc := &notifications{
 		dbP:   store,
 		pvdrs: pvdrs,
@@ -148,6 +155,19 @@ func newWithProviders(svc core.Service, pvdrs []providers.Provider) error {
 	}
 
 	pb.RegisterNotificationsServer(grpcApi.Server(), nSvc)
+
+	var port int
+	found := svc.Repo().Config().Get("TCPPort", &port)
+	if !found {
+		return errors.New("TCP listener not configured")
+	}
+
+	pb.RegisterNotificationsHandlerFromEndpoint(
+		context.Background(),
+		httpApi.Gateway(),
+		fmt.Sprintf("http://localhost:%d", port),
+		nil,
+	)
 
 	evApi.RegisterHandler(func() events.Event {
 		return &SendRequest{}

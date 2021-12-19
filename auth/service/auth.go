@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
 	"strings"
 	"time"
@@ -145,22 +146,32 @@ func New(svc core.Service) error {
 	if err != nil {
 		return err
 	}
+
 	evApi, err := svc.Events()
 	if err != nil {
 		return err
 	}
+
 	grpcApi, err := svc.GRPC()
 	if err != nil {
 		return err
 	}
+
 	lkApi, err := svc.Locker()
 	if err != nil {
 		return err
 	}
+
 	store, err := svc.SharedStorage("auth", nil)
 	if err != nil {
 		return err
 	}
+
+	httpApi, err := svc.HTTP()
+	if err != nil {
+		return err
+	}
+
 	pb.RegisterAuthServer(grpcApi.Server(), &authServer{
 		dbP:  store,
 		lckr: lkApi,
@@ -168,6 +179,20 @@ func New(svc core.Service) error {
 		jm:   jwtMgr,
 	})
 	log.Info("Auth service registered")
+
+	var port int
+	found := svc.Repo().Config().Get("TCPPort", &port)
+	if !found {
+		return errors.New("TCP listener not configured")
+	}
+
+	pb.RegisterAuthHandlerFromEndpoint(
+		context.Background(),
+		httpApi.Gateway(),
+		fmt.Sprintf("http://localhost:%d", port),
+		nil,
+	)
+
 	return nil
 }
 

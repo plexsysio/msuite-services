@@ -61,6 +61,7 @@ func TestAuthFlow(t *testing.T) {
 		msuite.WithGRPC(),
 		msuite.WithGRPCTCPListener(10000),
 		msuite.WithP2PPort(10001),
+		msuite.WithHTTP(10002),
 		msuite.WithLocker("inmem", nil),
 		msuite.WithServiceACL(map[string]string{
 			"dummyresource": "admin",
