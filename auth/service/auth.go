@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -16,7 +17,6 @@ import (
 	"github.com/plexsysio/go-msuite/modules/events"
 	"github.com/plexsysio/msuite-services/app_errors"
 	"github.com/plexsysio/msuite-services/auth/pb"
-	"github.com/plexsysio/msuite-services/utils"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/net/context"
 )
@@ -215,7 +215,7 @@ func (s *authServer) Register(c context.Context, creds *pb.AuthCredentials) (*pb
 	var randStr string
 	switch creds.Type {
 	case pb.LoginType_Email:
-		randStr = utils.RandStringBytes(20)
+		randStr = RandStringBytes(20)
 	case pb.LoginType_Mobile:
 		randStr = otpGen.Get()
 	case pb.LoginType_OAuthProvider:
@@ -520,7 +520,7 @@ func (s *authServer) ForgotPassword(c context.Context, creds *pb.AuthCredentials
 		return nil, app_errors.ErrInvalidArg("user does not exist %v", err)
 	}
 
-	tempPwd := utils.RandStringBytes(10)
+	tempPwd := RandStringBytes(10)
 	hashedPass, err := bcrypt.GenerateFromPassword([]byte(tempPwd), bcrypt.DefaultCost)
 	if err != nil {
 		log.Errorf("failed to generate password hash. SecErr:%s", err.Error())
@@ -586,6 +586,18 @@ func (s *authServer) ReportUnauthorizedPwdChange(
 	}
 
 	return &pb.AuthResponse{}, nil
+}
+
+// For generating random strings
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func RandStringBytes(n int) string {
+	rand.Seed(time.Now().Unix() + time.Now().UnixNano())
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Int63()%int64(len(letterBytes))]
+	}
+	return string(b)
 }
 
 var user_registration_email = `<style>
