@@ -17,6 +17,7 @@ import (
 	"github.com/plexsysio/msuite-services/notifications/pb"
 	"github.com/plexsysio/msuite-services/notifications/providers"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 )
 
 var log = logger.Logger("notifications")
@@ -162,12 +163,15 @@ func newWithProviders(svc core.Service, pvdrs []providers.Provider) error {
 		return errors.New("TCP listener not configured")
 	}
 
-	pb.RegisterNotificationsHandlerFromEndpoint(
+	err = pb.RegisterNotificationsHandlerFromEndpoint(
 		context.Background(),
 		httpApi.Gateway(),
-		fmt.Sprintf("http://localhost:%d", port),
-		nil,
+		fmt.Sprintf("localhost:%d", port),
+		[]grpc.DialOption{grpc.WithInsecure()},
 	)
+	if err != nil {
+		return err
+	}
 
 	evApi.RegisterHandler(func() events.Event {
 		return &SendRequest{}

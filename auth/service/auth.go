@@ -20,6 +20,7 @@ import (
 	"github.com/plexsysio/msuite-services/auth/pb"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -142,7 +143,7 @@ type authServer struct {
 }
 
 func New(svc core.Service) error {
-	jwtMgr, err := svc.Auth().JWT()
+	authApi, err := svc.Auth()
 	if err != nil {
 		return err
 	}
@@ -176,7 +177,7 @@ func New(svc core.Service) error {
 		dbP:  store,
 		lckr: lkApi,
 		ev:   evApi,
-		jm:   jwtMgr,
+		jm:   authApi.JWT(),
 	})
 	log.Info("Auth service registered")
 
@@ -186,12 +187,15 @@ func New(svc core.Service) error {
 		return errors.New("TCP listener not configured")
 	}
 
-	pb.RegisterAuthHandlerFromEndpoint(
+	err = pb.RegisterAuthHandlerFromEndpoint(
 		context.Background(),
 		httpApi.Gateway(),
-		fmt.Sprintf("http://localhost:%d", port),
-		nil,
+		fmt.Sprintf("localhost:%d", port),
+		[]grpc.DialOption{grpc.WithInsecure()},
 	)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
