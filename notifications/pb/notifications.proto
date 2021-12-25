@@ -1,16 +1,24 @@
 syntax = "proto3";
 
-option go_package = "gitlab.com/go-msuite/notifications/pb";
 package notifications;
+
+option go_package = "gitlab.com/go-msuite/notifications/pb";
 
 import "common/pb/annotations.proto";
 import "common/pb/common.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "validator.proto";
 
 service Notifications {
     rpc Subscribe(SubscribeReq) returns (msgs.UUID) {
         option (google.api.http) = {
             post: "/notifications/v1/subscribe"
             body: "*"
+        };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            summary: "Subscribe user"
+            description: "Used to register user with notification service with respective handles."
+            tags: "Notifications"
         };
     }
 
@@ -19,11 +27,21 @@ service Notifications {
             post: "/notifications/v1/send"
             body: "*"
         };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            summary: "Send Message"
+            description: "Used to send message to the user on one of the subscribed channel or one provided in the request."
+            tags: "Notifications"
+        };
     }
 
     rpc Get(msgs.UUIDs) returns (NotificationList) {
         option (google.api.http) = {
             get: "/notifications/v1/get"
+        };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            summary: "Get notifications"
+            description: "Used to get notifications by ID."
+            tags: "Notifications"
         };
     }
 }
@@ -44,13 +62,13 @@ enum NotificationType {
 }
 
 message SubscriberInfo {
-    NotificationType  mode  = 1;
-    string            identifier = 2;
+    NotificationType  mode  = 1 [(validator.field) = {is_in_enum : true}];
+    string            identifier = 2 [(validator.field) = {string_not_empty : true}];
 }
 
 message SubscribeReq {
-    string user_id = 1;
-    repeated SubscriberInfo subscriptions = 2;
+    string user_id = 1 [(validator.field) = {string_not_empty : true}];
+    repeated SubscriberInfo subscriptions = 2 [(validator.field) = {repeated_count_min : 1}];
 }
 
 message Msg {
@@ -61,7 +79,7 @@ message Msg {
 }
 
 message SendReq {
-    NotificationType type    = 1;
+    NotificationType type    = 1 [(validator.field) = {is_in_enum: true}];
     string           user_id = 2;
     Msg              data    = 3;
 }

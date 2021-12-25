@@ -1,0 +1,270 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "notifications.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "Notifications"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/notifications/v1/get": {
+      "get": {
+        "summary": "Get notifications",
+        "description": "Used to get notifications by ID.",
+        "operationId": "Notifications_Get",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/notificationsNotificationList"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "vals",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          }
+        ],
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/notifications/v1/send": {
+      "post": {
+        "summary": "Send Message",
+        "description": "Used to send message to the user on one of the subscribed channel or one provided in the request.",
+        "operationId": "Notifications_Send",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/notificationsNotification"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/notificationsSendReq"
+            }
+          }
+        ],
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/notifications/v1/subscribe": {
+      "post": {
+        "summary": "Subscribe user",
+        "description": "Used to register user with notification service with respective handles.",
+        "operationId": "Notifications_Subscribe",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/msgsUUID"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/notificationsSubscribeReq"
+            }
+          }
+        ],
+        "tags": [
+          "Notifications"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "msgsUUID": {
+      "type": "object",
+      "properties": {
+        "val": {
+          "type": "string"
+        }
+      }
+    },
+    "notificationsMsg": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        }
+      }
+    },
+    "notificationsNotification": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/notificationsNotificationType"
+        },
+        "data": {
+          "$ref": "#/definitions/notificationsMsg"
+        },
+        "created": {
+          "type": "string",
+          "format": "int64"
+        },
+        "updated": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "notificationsNotificationList": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/notificationsNotification"
+          }
+        }
+      }
+    },
+    "notificationsNotificationType": {
+      "type": "string",
+      "enum": [
+        "RESERVED",
+        "EMAIL",
+        "SMS",
+        "WEB",
+        "ANDROID",
+        "IOS",
+        "PULL"
+      ],
+      "default": "RESERVED",
+      "description": " - PULL: Pull type is basically a notification which will be pulled\nby client subsequently. We just need to save the notification\nin this case.\nThe value is such that, any of the WEB, ANDROID or IOS providers\ncan be used to send the notification if they exist."
+    },
+    "notificationsSendReq": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/notificationsNotificationType"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "data": {
+          "$ref": "#/definitions/notificationsMsg"
+        }
+      }
+    },
+    "notificationsSubscribeReq": {
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "subscriptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/notificationsSubscriberInfo"
+          }
+        }
+      }
+    },
+    "notificationsSubscriberInfo": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/definitions/notificationsNotificationType"
+        },
+        "identifier": {
+          "type": "string"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "typeUrl": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    }
+  }
+}

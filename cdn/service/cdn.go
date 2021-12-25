@@ -6,11 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SWRMLabs/ss-store"
-	ipfslite "github.com/hsanjuan/ipfs-lite"
-	"github.com/ipfs/go-cid"
-	"github.com/plexsysio/go-msuite/lib"
-	"github.com/plexsysio/go-radix"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -20,16 +15,26 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	ipfslite "github.com/hsanjuan/ipfs-lite"
+	"github.com/ipfs/go-cid"
+	"github.com/plexsysio/gkvstore"
+	"github.com/plexsysio/go-msuite/core"
+	"github.com/plexsysio/go-radix"
 )
 
 var DefaultTimeout time.Duration = time.Second * 10
 
-func NewCDNService(svc msuite.Service) error {
-	ndApi, err := svc.Node()
+func NewCDNService(svc core.Service) error {
+	httpApi, err := svc.HTTP()
 	if err != nil {
 		return err
 	}
-	httpApi, err := svc.HTTP()
+	filesApi, err := svc.Files()
+	if err != nil {
+		return err
+	}
+	st, err := svc.SharedStorage("cdn", nil)
 	if err != nil {
 		return err
 	}
@@ -38,17 +43,17 @@ func NewCDNService(svc msuite.Service) error {
 	if !ok {
 		return errors.New("Failed to get HTTP port")
 	}
-	cdnsvc := &cdn{port: httpPort, p: ndApi.IPFS(), st: ndApi.Storage()}
-	httpApi.Mux().HandleFunc("/v1/cdn/put", cdnsvc.Put)
-	httpApi.Mux().HandleFunc("/v1/cdn/get/", cdnsvc.Get)
-	httpApi.Mux().HandleFunc("/v1/cdn/list", cdnsvc.List)
-	httpApi.Mux().HandleFunc("/v1/cdn/upload", cdnsvc.UploadForm)
+	cdnsvc := &cdn{port: httpPort, p: filesApi, st: st}
+	httpApi.Mux().HandleFunc("/cdn/v1/put", cdnsvc.Put)
+	httpApi.Mux().HandleFunc("/cdn/v1/get/", cdnsvc.Get)
+	httpApi.Mux().HandleFunc("/cdn/v1/list", cdnsvc.List)
+	httpApi.Mux().HandleFunc("/cdn/v1/upload", cdnsvc.UploadForm)
 	return nil
 }
 
 type cdn struct {
 	p    *ipfslite.Peer
-	st   store.Store
+	st   gkvstore.Store
 	port int
 }
 
@@ -56,7 +61,7 @@ type ManifestObj struct {
 	Cid string
 }
 
-func (f *ManifestObj) GetId() string {
+func (f *ManifestObj) GetID() string {
 	return f.Cid
 }
 
@@ -70,10 +75,6 @@ func (f *ManifestObj) Marshal() ([]byte, error) {
 
 func (f *ManifestObj) Unmarshal(buf []byte) error {
 	return json.Unmarshal(buf, f)
-}
-
-func (f *ManifestObj) Factory() store.SerializedItem {
-	return f
 }
 
 func errorHTML(msg string, w http.ResponseWriter) {
@@ -210,7 +211,7 @@ func (c *cdn) Put(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mObj := &ManifestObj{Cid: mnode.Cid().String()}
-	err = c.st.Create(mObj)
+	err = c.st.Create(r.Context(), mObj)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		errorHTML("Failed storing manifest object: "+err.Error(), w)
@@ -224,6 +225,7 @@ func (c *cdn) Put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.WriteHeader(http.StatusCreated)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(resp)
 }
@@ -313,10 +315,6 @@ func (m *multipartReader) Next() (*FileInfo, error) {
 		return nil, errors.New("content-type missing")
 	}
 
-	if filepath.Dir(fileName) != "." {
-		return nil, errors.New("multipart upload supports only single directory")
-	}
-
 	return &FileInfo{
 		Path:        fileName,
 		Name:        fileName,
@@ -332,7 +330,7 @@ func (c *cdn) Get(w http.ResponseWriter, r *http.Request) {
 		full       string
 	)
 	useIndex := false
-	_, err := fmt.Sscanf(r.URL.Path, "/v1/cdn/get/%s", &full)
+	_, err := fmt.Sscanf(r.URL.Path, "/cdn/v1/get/%s", &full)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		errorHTML("BadRequest: Failed parsing file ID Err:"+err.Error(), w)
@@ -344,7 +342,6 @@ func (c *cdn) Get(w http.ResponseWriter, r *http.Request) {
 		filePath = strings.Join(splits[1:], "/")
 	}
 	if filePath == "" {
-		fmt.Println("Using index")
 		useIndex = true
 	}
 	mcid, err := cid.Decode(manifestID)
@@ -421,7 +418,7 @@ func (c *cdn) List(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	items, err := c.st.List(&ManifestObj{}, store.ListOpt{
+	items, err := c.st.List(r.Context(), func() gkvstore.Item { return &ManifestObj{} }, gkvstore.ListOpt{
 		Page:  int64(pg),
 		Limit: int64(lim),
 	})
@@ -431,8 +428,13 @@ func (c *cdn) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	retList := []*ManifestObj{}
-	for _, v := range items {
-		retList = append(retList, v.(*ManifestObj))
+	for v := range items {
+		if v.Err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			errorHTML("InternalError: Failed to list files", w)
+			return
+		}
+		retList = append(retList, v.Val.(*ManifestObj))
 	}
 	resp, err := json.Marshal(retList)
 	if err != nil {
