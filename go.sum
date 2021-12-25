@@ -1164,6 +1164,8 @@ github.com/multiformats/go-varint v0.0.6 h1:gk85QWKxh3TazbLxED/NlDVv8+q+ReFJk7Y2
 github.com/multiformats/go-varint v0.0.6/go.mod h1:3Ls8CIEsrijN6+B7PbrXRPxHRPuXSrVKRY101jdMZYE=
 github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
 github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
+github.com/mwitkow/go-proto-validators v0.3.2 h1:qRlmpTzm2pstMKKzTdvwPCF5QfBNURSlAgN/R+qbKos=
+github.com/mwitkow/go-proto-validators v0.3.2/go.mod h1:ej0Qp0qMgHN/KtDyUt+Q1/tA7a5VarXUOUxD+oeD30w=
 github.com/nats-io/jwt v0.3.0/go.mod h1:fRYCDE99xlTsqUzISS1Bi75UBJ6ljOJQOAAu5VglpSg=
 github.com/nats-io/jwt v0.3.2/go.mod h1:/euKqTS1ZD+zzjYrY7pseZrTtWQSjujC7xjPc8wL6eU=
 github.com/nats-io/nats-server/v2 v2.1.2/go.mod h1:Afk+wRZqkMQs/p45uXdrVLuab3gwv3Z8C4HTBu8GD/k=
@@ -1243,6 +1245,8 @@ github.com/plexsysio/gkvstore v0.0.0-20211204172721-e2f4fbfc6e4a h1:i/QhJ2NTzKpw
 github.com/plexsysio/gkvstore v0.0.0-20211204172721-e2f4fbfc6e4a/go.mod h1:lH4fXSRz6RgscHeH8jMjhiPbtah8EavHaVouOe609n4=
 github.com/plexsysio/gkvstore-ipfsds v0.0.0-20211128070946-4089eab5b669 h1:5FDkSXqpqo5sQ6yK4RD9zHeNAeCbpRW1H9Y8dtoUHeY=
 github.com/plexsysio/gkvstore-ipfsds v0.0.0-20211128070946-4089eab5b669/go.mod h1:5W7TxSY++/GBlLNLdctE5qy8Qkh1qpfkcCDUXRUIkZg=
+github.com/plexsysio/go-msuite v0.0.0-20211224204258-dcb3fc5f149e h1:rFKIgHtQBOtkAOpo4bSA/bUNxn2wb7WdQXscYzk7ALU=
+github.com/plexsysio/go-msuite v0.0.0-20211224204258-dcb3fc5f149e/go.mod h1:01Js+u5f706bt7MLd7eDMdZIkXWskpSPsnmZ/LA5m8Q=
 github.com/plexsysio/go-radix v0.0.2 h1:AKHJzF1uZ8yXrhg6bnIHkj8/aiJJvh8uKohnq2YR1HY=
 github.com/plexsysio/go-radix v0.0.2/go.mod h1:aj5K/JZoHA6fsLdWiO8Rckp2zZbsp3UdBDgf8Cwu5O0=
 github.com/plexsysio/taskmanager v0.0.0-20210719193446-5b3bff8bc055 h1:yOvgKy0uXwAfkoG8tQbaS46C+N3qpkXftOT/TgbLNew=

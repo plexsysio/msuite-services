@@ -5,19 +5,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
+	"net/http"
 	"time"
 
-	proto "github.com/golang/protobuf/proto"
 	logger "github.com/ipfs/go-log/v2"
 	"github.com/plexsysio/gkvstore"
 	"github.com/plexsysio/go-msuite/core"
 	"github.com/plexsysio/go-msuite/modules/events"
 	"github.com/plexsysio/msuite-services/app_errors"
 	msgs "github.com/plexsysio/msuite-services/common/pb"
+	"github.com/plexsysio/msuite-services/notifications/openapiv2"
 	"github.com/plexsysio/msuite-services/notifications/pb"
 	"github.com/plexsysio/msuite-services/notifications/providers"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 var log = logger.Logger("notifications")
@@ -172,6 +175,13 @@ func newWithProviders(svc core.Service, pvdrs []providers.Provider) error {
 	if err != nil {
 		return err
 	}
+
+	subFS, err := fs.Sub(openapiv2.OpenAPI, "OpenAPI")
+	if err != nil {
+		return err
+	}
+
+	httpApi.Mux().Handle("/notifications/openapiv2/", http.StripPrefix("/notifications/openapiv2", http.FileServer(http.FS(subFS))))
 
 	evApi.RegisterHandler(func() events.Event {
 		return &SendRequest{}

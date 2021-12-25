@@ -5,12 +5,12 @@ import (
 	"fmt"
 
 	"github.com/plexsysio/go-msuite"
-	authSvc "github.com/plexsysio/msuite-services/auth/service"
+	notificationsSvc "github.com/plexsysio/msuite-services/notifications/service"
 )
 
 func main() {
 	svc, err := msuite.New(
-		msuite.WithService("auth", authSvc.New),
+		msuite.WithService("notifications", notificationsSvc.New),
 		msuite.WithAuth("dummysecret"),
 		msuite.WithGRPC("tcp", 10000),
 		msuite.WithP2P(10001),

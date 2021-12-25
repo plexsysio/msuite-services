@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/anachronistic/apns v0.0.0-20151129191123-91763352f7bf
 	github.com/ghodss/yaml v1.0.0 // indirect
-	github.com/golang/protobuf v1.5.2
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.3.0
 	github.com/hgfischer/go-otp v1.0.0
 	github.com/hsanjuan/ipfs-lite v1.2.0
@@ -15,7 +15,7 @@ require (
 	github.com/messagebird/go-rest-api v5.3.0+incompatible
 	github.com/plexsysio/dLocker v0.0.3-0.20211128192511-fcfcafab3562
 	github.com/plexsysio/gkvstore v0.0.0-20211204172721-e2f4fbfc6e4a
-	github.com/plexsysio/go-msuite v0.0.0-20211214121042-64cb5e7cc570
+	github.com/plexsysio/go-msuite v0.0.0-20211224204258-dcb3fc5f149e
 	github.com/plexsysio/go-radix v0.0.2
 	go.uber.org/fx v1.16.0 // indirect
 	golang.org/x/crypto v0.0.0-20211117183948-ae814b36b871
@@ -28,6 +28,8 @@ require (
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 )
+
+require github.com/mwitkow/go-proto-validators v0.3.2
 
 require (
 	github.com/alecthomas/units v0.0.0-20210927113745-59d0afb8317a // indirect
@@ -221,5 +223,3 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )
-
-replace github.com/plexsysio/go-msuite => ../go-msuite

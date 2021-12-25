@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"math/rand"
+	"net/http"
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/hgfischer/go-otp"
 	logger "github.com/ipfs/go-log/v2"
 	"github.com/plexsysio/dLocker"
@@ -17,10 +18,12 @@ import (
 	"github.com/plexsysio/go-msuite/modules/auth"
 	"github.com/plexsysio/go-msuite/modules/events"
 	"github.com/plexsysio/msuite-services/app_errors"
+	"github.com/plexsysio/msuite-services/auth/openapiv2"
 	"github.com/plexsysio/msuite-services/auth/pb"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -196,6 +199,13 @@ func New(svc core.Service) error {
 	if err != nil {
 		return err
 	}
+
+	subFS, err := fs.Sub(openapiv2.OpenAPI, "OpenAPI")
+	if err != nil {
+		return err
+	}
+
+	httpApi.Mux().Handle("/auth/openapiv2/", http.StripPrefix("/auth/openapiv2", http.FileServer(http.FS(subFS))))
 
 	return nil
 }

@@ -1,9 +1,12 @@
 syntax = "proto3";
 
-option go_package = "github.com/plexsysio/msuite-services/auth/pb";
 package auth;
 
 import "common/pb/annotations.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "validator.proto";
+
+option go_package = "github.com/plexsysio/msuite-services/auth/pb";
 
 enum LoginType {
     None            = 0;
@@ -13,29 +16,29 @@ enum LoginType {
 }
 
 message AuthCredentials {
-    LoginType type  = 1;
-    string username = 2;
+    LoginType type  = 1 [(validator.field) = {is_in_enum: true}];
+    string username = 2 [(validator.field) = {string_not_empty: true}];
     string password = 3;
 }
 
 message VerifyReq {
-    string          code  = 1;
-    AuthCredentials creds = 2;
+    string          code  = 1 [(validator.field) = {string_not_empty: true}];
+    AuthCredentials creds = 2 [(validator.field) = {msg_exists : true}];
 }
 
 message AuthResponse {}
 
 message AuthResult {
-    string user_id       = 1;
-    string access_token  = 2;
-    string refresh_token = 3;
+    string user_id       = 1 [(validator.field) = {string_not_empty: true}];
+    string access_token  = 2 [(validator.field) = {string_not_empty: true}];
+    string refresh_token = 3 [(validator.field) = {string_not_empty: true}];
 }
 
 message UpdateCredentials {
-    string user_id      = 1;
-    string new_password = 2;
-    string old_password = 3;
-    string access_token = 4;
+    string user_id      = 1 [(validator.field) = {string_not_empty: true}];
+    string new_password = 2 [(validator.field) = {string_not_empty: true}];
+    string old_password = 3 [(validator.field) = {string_not_empty: true}];
+    string access_token = 4 [(validator.field) = {string_not_empty: true}];
 }
 
 message UnverifiedUser {
@@ -68,12 +71,22 @@ service Auth {
             post: "/auth/v1/register"
             body: "*"
         };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            summary: "Register user"
+            description: "Used to start user registeration process."
+            tags: "Auth"
+        };
     }
 
     // Used to complete verification.
     rpc Verify (VerifyReq) returns (AuthResponse) {
         option (google.api.http) = {
             post: "/auth/v1/verify/{code}"
+        };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            summary: "Verify user"
+            description: "Used to complete user registeration process."
+            tags: "Auth"
         };
     }
 
@@ -83,6 +96,11 @@ service Auth {
             post: "/auth/v1/authenticate"
             body: "*"
         };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            summary: "Authenticate user"
+            description: "Used to login user and provide tokens."
+            tags: "Auth"
+        };
     }
 
     // Used to get new token
@@ -90,6 +108,11 @@ service Auth {
         option (google.api.http) = {
             post: "/auth/v1/refresh_token"
             body: "*"
+        };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            summary: "Refresh tokens"
+            description: "Used to refresh user access token."
+            tags: "Auth"
         };
     }
 
@@ -105,6 +128,11 @@ service Auth {
             post: "/auth/v1/reset_password"
             body: "*"
         };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            summary: "Reset password"
+            description: "Used to reset user password."
+            tags: "Auth"
+        };
     }
 
     // In case if the user forgets the password, he will call this API
@@ -113,6 +141,11 @@ service Auth {
         option (google.api.http) = {
             post: "/auth/v1/forgot_password/{username}"
         };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            summary: "Forgot password"
+            description: "Used to help user reset password if he forgets."
+            tags: "Auth"
+        };
     }
 
     // If the user did not initiate the ForgotPassword workflow,
@@ -120,6 +153,11 @@ service Auth {
     rpc ReportUnauthorizedPwdChange (AuthCredentials) returns (AuthResponse) {
         option (google.api.http) = {
             post: "/auth/v1/report_pwd_change/{username}"
+        };
+        option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+            summary: "Report Unauthorized Password change"
+            description: "Can be used by users to report unauthorized forgot password requests."
+            tags: "Auth"
         };
     }
 }

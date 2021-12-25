@@ -15,7 +15,7 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/utilities"
-	pb_0 "github.com/plexsysio/msuite-services/common/pb"
+	"github.com/plexsysio/msuite-services/common/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
@@ -105,7 +105,7 @@ var (
 )
 
 func request_Notifications_Get_0(ctx context.Context, marshaler runtime.Marshaler, client NotificationsClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq pb_0.UUIDs
+	var protoReq pb.UUIDs
 	var metadata runtime.ServerMetadata
 
 	if err := req.ParseForm(); err != nil {
@@ -121,7 +121,7 @@ func request_Notifications_Get_0(ctx context.Context, marshaler runtime.Marshale
 }
 
 func local_request_Notifications_Get_0(ctx context.Context, marshaler runtime.Marshaler, server NotificationsServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq pb_0.UUIDs
+	var protoReq pb.UUIDs
 	var metadata runtime.ServerMetadata
 
 	if err := req.ParseForm(); err != nil {

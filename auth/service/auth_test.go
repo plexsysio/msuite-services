@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	logger "github.com/ipfs/go-log/v2"
 	"github.com/plexsysio/go-msuite"
 	"github.com/plexsysio/go-msuite/modules/events"
@@ -17,6 +16,7 @@ import (
 	auth "github.com/plexsysio/msuite-services/auth/service"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 type userRegisterEvent struct {
