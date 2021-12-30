@@ -7,10 +7,10 @@ import (
 	fmt "fmt"
 	math "math"
 	proto "github.com/golang/protobuf/proto"
-	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "github.com/mwitkow/go-proto-validators"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	_ "github.com/plexsysio/msuite-services/common/pb"
+	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	github_com_mwitkow_go_proto_validators "github.com/mwitkow/go-proto-validators"
 )
 
@@ -29,9 +29,6 @@ func (this *SubscriberInfo) Validate() error {
 	return nil
 }
 func (this *SubscribeReq) Validate() error {
-	if this.UserId == "" {
-		return github_com_mwitkow_go_proto_validators.FieldError("UserId", fmt.Errorf(`value '%v' must not be an empty string`, this.UserId))
-	}
 	if len(this.Subscriptions) < 1 {
 		return github_com_mwitkow_go_proto_validators.FieldError("Subscriptions", fmt.Errorf(`value '%v' must contain at least 1 elements`, this.Subscriptions))
 	}

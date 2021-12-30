@@ -1247,6 +1247,10 @@ github.com/plexsysio/gkvstore-ipfsds v0.0.0-20211128070946-4089eab5b669 h1:5FDkS
 github.com/plexsysio/gkvstore-ipfsds v0.0.0-20211128070946-4089eab5b669/go.mod h1:5W7TxSY++/GBlLNLdctE5qy8Qkh1qpfkcCDUXRUIkZg=
 github.com/plexsysio/go-msuite v0.0.0-20211224204258-dcb3fc5f149e h1:rFKIgHtQBOtkAOpo4bSA/bUNxn2wb7WdQXscYzk7ALU=
 github.com/plexsysio/go-msuite v0.0.0-20211224204258-dcb3fc5f149e/go.mod h1:01Js+u5f706bt7MLd7eDMdZIkXWskpSPsnmZ/LA5m8Q=
+github.com/plexsysio/go-msuite v0.0.0-20211229074038-ea7693858ba7 h1:4jrSy8DiI9KLuDTFkg3McrSsnXrMQJRehZCI3mPZ0yw=
+github.com/plexsysio/go-msuite v0.0.0-20211229074038-ea7693858ba7/go.mod h1:u8SueQxm78bsW4IU2KlOFjxcwSNyJZa8SXtv4wBO+pg=
+github.com/plexsysio/go-msuite v0.0.0-20211230180513-04a4eceab211 h1:79u79+W7hRvQtFWiQz6DzkUI/Rke22GBRvrs/D4Ckrk=
+github.com/plexsysio/go-msuite v0.0.0-20211230180513-04a4eceab211/go.mod h1:u8SueQxm78bsW4IU2KlOFjxcwSNyJZa8SXtv4wBO+pg=
 github.com/plexsysio/go-radix v0.0.2 h1:AKHJzF1uZ8yXrhg6bnIHkj8/aiJJvh8uKohnq2YR1HY=
 github.com/plexsysio/go-radix v0.0.2/go.mod h1:aj5K/JZoHA6fsLdWiO8Rckp2zZbsp3UdBDgf8Cwu5O0=
 github.com/plexsysio/taskmanager v0.0.0-20210719193446-5b3bff8bc055 h1:yOvgKy0uXwAfkoG8tQbaS46C+N3qpkXftOT/TgbLNew=

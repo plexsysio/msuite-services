@@ -67,7 +67,7 @@ message SubscriberInfo {
 }
 
 message SubscribeReq {
-    string user_id = 1 [(validator.field) = {string_not_empty : true}];
+    string user_id = 1;
     repeated SubscriberInfo subscriptions = 2 [(validator.field) = {repeated_count_min : 1}];
 }
 

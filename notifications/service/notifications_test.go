@@ -55,7 +55,7 @@ func TestNotificationsFlow(t *testing.T) {
 	testProvider := newTestProvider()
 
 	svc, err := msuite.New(
-		msuite.WithService("Notifications", notifications.NewCtorWithProvider(testProvider)),
+		msuite.WithServices("notifications"),
 		msuite.WithGRPC("tcp", 10000),
 		msuite.WithP2P(10001),
 		msuite.WithGRPC("p2p", nil),
@@ -64,7 +64,7 @@ func TestNotificationsFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = svc.Start(context.Background())
+	err = notifications.NewCtorWithProvider(testProvider)(svc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestNotificationsFlowGateway(t *testing.T) {
 	testProvider := newTestProvider()
 
 	svc, err := msuite.New(
-		msuite.WithService("Notifications", notifications.NewCtorWithProvider(testProvider)),
+		msuite.WithServices("notifications"),
 		msuite.WithGRPC("tcp", 10000),
 		msuite.WithP2P(10001),
 		msuite.WithGRPC("p2p", nil),
@@ -248,7 +248,7 @@ func TestNotificationsFlowGateway(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = svc.Start(context.Background())
+	err = notifications.NewCtorWithProvider(testProvider)(svc)
 	if err != nil {
 		t.Fatal(err)
 	}

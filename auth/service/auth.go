@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/fs"
 	"math/rand"
 	"net/http"
@@ -184,18 +183,18 @@ func New(svc core.Service) error {
 	})
 	log.Info("Auth service registered")
 
-	var port int
-	found := svc.Repo().Config().Get("TCPPort", &port)
-	if !found {
-		return errors.New("TCP listener not configured")
+	// Start the service to start the listeners
+	err = svc.Start(context.Background())
+	if err != nil {
+		return err
 	}
 
-	err = pb.RegisterAuthHandlerFromEndpoint(
-		context.Background(),
-		httpApi.Gateway(),
-		fmt.Sprintf("localhost:%d", port),
-		[]grpc.DialOption{grpc.WithInsecure()},
-	)
+	conn, err := grpcApi.Client(context.Background(), "auth", grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
+
+	err = pb.RegisterAuthHandler(context.Background(), httpApi.Gateway(), conn)
 	if err != nil {
 		return err
 	}
