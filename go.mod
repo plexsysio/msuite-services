@@ -15,7 +15,7 @@ require (
 	github.com/messagebird/go-rest-api v5.3.0+incompatible
 	github.com/plexsysio/dLocker v0.0.3-0.20211128192511-fcfcafab3562
 	github.com/plexsysio/gkvstore v0.0.0-20211204172721-e2f4fbfc6e4a
-	github.com/plexsysio/go-msuite v0.0.0-20211224204258-dcb3fc5f149e
+	github.com/plexsysio/go-msuite v0.0.0-20211230180513-04a4eceab211
 	github.com/plexsysio/go-radix v0.0.2
 	go.uber.org/fx v1.16.0 // indirect
 	golang.org/x/crypto v0.0.0-20211117183948-ae814b36b871

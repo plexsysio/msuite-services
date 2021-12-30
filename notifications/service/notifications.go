@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io/fs"
 	"net/http"
 	"time"
@@ -160,18 +158,18 @@ func newWithProviders(svc core.Service, pvdrs []providers.Provider) error {
 
 	pb.RegisterNotificationsServer(grpcApi.Server(), nSvc)
 
-	var port int
-	found := svc.Repo().Config().Get("TCPPort", &port)
-	if !found {
-		return errors.New("TCP listener not configured")
+	// Start the service to start the listeners
+	err = svc.Start(context.Background())
+	if err != nil {
+		return err
 	}
 
-	err = pb.RegisterNotificationsHandlerFromEndpoint(
-		context.Background(),
-		httpApi.Gateway(),
-		fmt.Sprintf("localhost:%d", port),
-		[]grpc.DialOption{grpc.WithInsecure()},
-	)
+	conn, err := grpcApi.Client(context.Background(), "notifications", grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
+
+	err = pb.RegisterNotificationsHandler(context.Background(), httpApi.Gateway(), conn)
 	if err != nil {
 		return err
 	}

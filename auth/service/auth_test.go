@@ -61,7 +61,7 @@ func TestAuthFlow(t *testing.T) {
 	logger.SetLogLevel("*", "Error")
 
 	svc, err := msuite.New(
-		msuite.WithService("Auth", auth.New),
+		msuite.WithServices("auth"),
 		msuite.WithAuth("dummysecret"),
 		msuite.WithGRPC("tcp", 10000),
 		msuite.WithP2P(10001),
@@ -75,7 +75,7 @@ func TestAuthFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = svc.Start(context.Background())
+	err = auth.New(svc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,10 +289,10 @@ func TestAuthFlow(t *testing.T) {
 }
 
 func TestAuthFlowGateway(t *testing.T) {
-	logger.SetLogLevel("*", "Error")
+	_ = logger.SetLogLevel("*", "Debug")
 
 	svc, err := msuite.New(
-		msuite.WithService("Auth", auth.New),
+		msuite.WithServices("auth"),
 		msuite.WithAuth("dummysecret"),
 		msuite.WithGRPC("tcp", 10000),
 		msuite.WithP2P(10001),
@@ -306,7 +306,7 @@ func TestAuthFlowGateway(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = svc.Start(context.Background())
+	err = auth.New(svc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +359,7 @@ func TestAuthFlowGateway(t *testing.T) {
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			t.Fatal("invalid response code", resp.StatusCode)
+			t.Fatal("invalid response code", resp)
 		}
 
 		t.Logf("Created new user %v", resp)

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/plexsysio/go-msuite"
@@ -10,7 +9,7 @@ import (
 
 func main() {
 	svc, err := msuite.New(
-		msuite.WithService("auth", authSvc.New),
+		msuite.WithServices("auth"),
 		msuite.WithAuth("dummysecret"),
 		msuite.WithGRPC("tcp", 10000),
 		msuite.WithP2P(10001),
@@ -26,7 +25,7 @@ func main() {
 		return
 	}
 
-	err = svc.Start(context.Background())
+	err = authSvc.New(svc)
 	if err != nil {
 		fmt.Println("failed to start service", err)
 		return
