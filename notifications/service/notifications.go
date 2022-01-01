@@ -126,10 +126,10 @@ func New(svc core.Service) error {
 		}
 	}
 
-	return newWithProviders(svc, pvdrs)
+	return NewWithProviders(svc, pvdrs)
 }
 
-func newWithProviders(svc core.Service, pvdrs []providers.Provider) error {
+func NewWithProviders(svc core.Service, pvdrs []providers.Provider) error {
 	evApi, err := svc.Events()
 	if err != nil {
 		return err
@@ -188,11 +188,38 @@ func newWithProviders(svc core.Service, pvdrs []providers.Provider) error {
 	return nil
 }
 
-func (s *notifications) Subscribe(c context.Context, req *pb.SubscribeReq) (*msgs.UUID, error) {
-
-	if len(req.Subscriptions) == 0 {
-		return nil, app_errors.ErrInvalidArg("no subscriptions provided")
+func NewRPCWithProviders(svc core.Service, pvdrs []providers.Provider) error {
+	evApi, err := svc.Events()
+	if err != nil {
+		return err
 	}
+
+	grpcApi, err := svc.GRPC()
+	if err != nil {
+		return err
+	}
+
+	store, err := svc.SharedStorage("notifications", nil)
+	if err != nil {
+		return err
+	}
+
+	nSvc := &notifications{
+		dbP:   store,
+		pvdrs: pvdrs,
+		ev:    evApi,
+	}
+
+	pb.RegisterNotificationsServer(grpcApi.Server(), nSvc)
+
+	evApi.RegisterHandler(func() events.Event {
+		return &SendRequest{}
+	}, nSvc.handleSendMessage)
+
+	return nil
+}
+
+func (s *notifications) Subscribe(c context.Context, req *pb.SubscribeReq) (*msgs.UUID, error) {
 
 	if req.UserId == "" {
 		err := s.dbP.Create(c, &subscriber{SubscribeReq: req})

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"testing"
 	"time"
 
@@ -14,54 +15,50 @@ import (
 	"github.com/plexsysio/go-msuite/modules/events"
 	"github.com/plexsysio/msuite-services/auth/pb"
 	auth "github.com/plexsysio/msuite-services/auth/service"
+	npb "github.com/plexsysio/msuite-services/notifications/pb"
+	"github.com/plexsysio/msuite-services/notifications/providers"
+	notifications "github.com/plexsysio/msuite-services/notifications/service"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
-type userRegisterEvent struct {
-	*pb.UnverifiedUser
+type testNotifProvider struct {
+	out chan *npb.Notification
 }
 
-func (u *userRegisterEvent) Topic() string {
-	return "NewUserRegistration"
-}
-
-func (u *userRegisterEvent) Marshal() ([]byte, error) {
-	return proto.Marshal(u.UnverifiedUser)
-}
-
-func (u *userRegisterEvent) Unmarshal(buf []byte) error {
-	if u.UnverifiedUser == nil {
-		u.UnverifiedUser = &pb.UnverifiedUser{}
+func newTestProvider() *testNotifProvider {
+	return &testNotifProvider{
+		out: make(chan *npb.Notification, 10),
 	}
-	return proto.Unmarshal(buf, u.UnverifiedUser)
 }
 
-type userCreatedEvent struct {
-	*pb.VerifiedUser
-}
-
-func (u *userCreatedEvent) Topic() string {
-	return "NewUserCreated"
-}
-
-func (u *userCreatedEvent) Marshal() ([]byte, error) {
-	return proto.Marshal(u.VerifiedUser)
-}
-
-func (u *userCreatedEvent) Unmarshal(buf []byte) error {
-	if u.VerifiedUser == nil {
-		u.VerifiedUser = &pb.VerifiedUser{}
+func (testNotifProvider) SupportedModes() []npb.NotificationType {
+	return []npb.NotificationType{
+		npb.NotificationType_EMAIL,
+		npb.NotificationType_SMS,
+		npb.NotificationType_ANDROID,
 	}
-	return proto.Unmarshal(buf, u.VerifiedUser)
+}
+
+func (t *testNotifProvider) Send(req *npb.SendReq) (*npb.Notification, error) {
+	n := &npb.Notification{
+		UserId: req.GetUserId(),
+		Type:   req.GetType(),
+		Data:   req.GetData(),
+	}
+	t.out <- n
+	return n, nil
+}
+
+func (t *testNotifProvider) Outbox() <-chan *npb.Notification {
+	return t.out
 }
 
 func TestAuthFlow(t *testing.T) {
 	logger.SetLogLevel("*", "Error")
 
 	svc, err := msuite.New(
-		msuite.WithServices("auth"),
+		msuite.WithServices("auth", "notifications"),
 		msuite.WithAuth("dummysecret"),
 		msuite.WithGRPC("tcp", 10000),
 		msuite.WithP2P(10001),
@@ -75,10 +72,19 @@ func TestAuthFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	testProvider := newTestProvider()
+
+	err = notifications.NewRPCWithProviders(svc, []providers.Provider{testProvider})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = auth.New(svc)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer svc.Stop(context.Background())
 
 	conn, err := grpc.Dial(":10000", grpc.WithInsecure())
@@ -99,19 +105,7 @@ func TestAuthFlow(t *testing.T) {
 	eventChan := make(chan events.Event)
 
 	evApi.RegisterHandler(func() events.Event {
-		return &userRegisterEvent{}
-	}, func(e events.Event) {
-		eventChan <- e
-	})
-
-	evApi.RegisterHandler(func() events.Event {
-		return &userCreatedEvent{}
-	}, func(e events.Event) {
-		eventChan <- e
-	})
-
-	evApi.RegisterHandler(func() events.Event {
-		return &auth.ForgotPasswordRequest{}
+		return &auth.NewUserEvent{}
 	}, func(e events.Event) {
 		eventChan <- e
 	})
@@ -131,25 +125,24 @@ func TestAuthFlow(t *testing.T) {
 		t.Logf("Created new user %v", resp)
 	})
 
-	var newUser *userRegisterEvent
+	var notification1 *npb.Notification
 
 	select {
 	case <-time.After(time.Second):
-	case e := <-eventChan:
-		n, ok := e.(*userRegisterEvent)
-		if !ok {
-			t.Fatal("got incorrent event")
-		}
-		newUser = n
+	case notification1 = <-testProvider.Outbox():
 	}
 
-	if newUser == nil {
+	if notification1 == nil {
 		t.Fatal("did not get new user notification")
 	}
 
+	r, _ := regexp.Compile(fmt.Sprintf("http://%s/auth/v1/verify/*", auth.BaseUrl))
+	lt := r.FindStringIndex(notification1.Data.Body)
+	code := notification1.Data.Body[lt[1] : lt[1]+20]
+
 	t.Run("verify user", func(t *testing.T) {
 		resp, err := authClient.Verify(reqCtx, &pb.VerifyReq{
-			Code:  newUser.UnverifiedUser.Code,
+			Code:  code,
 			Creds: usr,
 		})
 		if err != nil {
@@ -159,12 +152,12 @@ func TestAuthFlow(t *testing.T) {
 		t.Logf("Verified new user %v", resp)
 	})
 
-	var createdUser *userCreatedEvent
+	var createdUser *auth.NewUserEvent
 
 	select {
 	case <-time.After(time.Second):
 	case e := <-eventChan:
-		n, ok := e.(*userCreatedEvent)
+		n, ok := e.(*auth.NewUserEvent)
 		if !ok {
 			t.Fatal("got incorrent event")
 		}
@@ -233,29 +226,26 @@ func TestAuthFlow(t *testing.T) {
 		t.Logf("Forgot password %v", resp)
 	})
 
-	var forgotReq *auth.ForgotPasswordRequest
+	var notification2 *npb.Notification
 
 	select {
 	case <-time.After(time.Second):
-	case e := <-eventChan:
-		n, ok := e.(*auth.ForgotPasswordRequest)
-		if !ok {
-			t.Fatal("got incorrent event")
-		}
-		forgotReq = n
+	case notification2 = <-testProvider.Outbox():
 	}
 
-	if forgotReq == nil {
-		t.Fatal("did not get forgot password notification")
+	if notification2 == nil {
+		t.Fatal("did not get new user notification")
 	}
 
-	t.Logf("Forgot password request %v", createdUser)
+	r2, _ := regexp.Compile("Temporary Password: *")
+	lt2 := r2.FindStringIndex(notification2.Data.Body)
+	tmpPwd := notification2.Data.Body[lt2[1] : lt2[1]+10]
 
 	t.Run("authenticate user with temp password", func(t *testing.T) {
 		resp, err := authClient.Authenticate(reqCtx, &pb.AuthCredentials{
-			Type:     pb.LoginType(pb.LoginType_value[forgotReq.UsernameType]),
-			Username: forgotReq.Username,
-			Password: forgotReq.TempPassword,
+			Type:     usr.Type,
+			Username: usr.Username,
+			Password: tmpPwd,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -267,8 +257,8 @@ func TestAuthFlow(t *testing.T) {
 
 	t.Run("report unauthorized password change", func(t *testing.T) {
 		resp, err := authClient.ReportUnauthorizedPwdChange(reqCtx, &pb.AuthCredentials{
-			Type:     pb.LoginType(pb.LoginType_value[forgotReq.UsernameType]),
-			Username: forgotReq.Username,
+			Type:     usr.Type,
+			Username: usr.Username,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -292,7 +282,7 @@ func TestAuthFlowGateway(t *testing.T) {
 	_ = logger.SetLogLevel("*", "Debug")
 
 	svc, err := msuite.New(
-		msuite.WithServices("auth"),
+		msuite.WithServices("auth", "notifications"),
 		msuite.WithAuth("dummysecret"),
 		msuite.WithGRPC("tcp", 10000),
 		msuite.WithP2P(10001),
@@ -306,10 +296,19 @@ func TestAuthFlowGateway(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	testProvider := newTestProvider()
+
+	err = notifications.NewRPCWithProviders(svc, []providers.Provider{testProvider})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = auth.New(svc)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer svc.Stop(context.Background())
 
 	evApi, err := svc.Events()
@@ -320,19 +319,7 @@ func TestAuthFlowGateway(t *testing.T) {
 	eventChan := make(chan events.Event)
 
 	evApi.RegisterHandler(func() events.Event {
-		return &userRegisterEvent{}
-	}, func(e events.Event) {
-		eventChan <- e
-	})
-
-	evApi.RegisterHandler(func() events.Event {
-		return &userCreatedEvent{}
-	}, func(e events.Event) {
-		eventChan <- e
-	})
-
-	evApi.RegisterHandler(func() events.Event {
-		return &auth.ForgotPasswordRequest{}
+		return &auth.NewUserEvent{}
 	}, func(e events.Event) {
 		eventChan <- e
 	})
@@ -365,25 +352,24 @@ func TestAuthFlowGateway(t *testing.T) {
 		t.Logf("Created new user %v", resp)
 	})
 
-	var newUser *userRegisterEvent
+	var notification1 *npb.Notification
 
 	select {
 	case <-time.After(time.Second):
-	case e := <-eventChan:
-		n, ok := e.(*userRegisterEvent)
-		if !ok {
-			t.Fatal("got incorrent event")
-		}
-		newUser = n
+	case notification1 = <-testProvider.Outbox():
 	}
 
-	if newUser == nil {
+	if notification1 == nil {
 		t.Fatal("did not get new user notification")
 	}
 
+	r, _ := regexp.Compile(fmt.Sprintf("http://%s/auth/v1/verify/*", auth.BaseUrl))
+	lt := r.FindStringIndex(notification1.Data.Body)
+	code := notification1.Data.Body[lt[1] : lt[1]+20]
+
 	t.Run("verify user", func(t *testing.T) {
 		verifyURL := fmt.Sprintf("%sverify/%s?creds.type=%s&creds.username=%s",
-			baseURL, newUser.UnverifiedUser.Code, usr.Type, usr.Username)
+			baseURL, code, usr.Type, usr.Username)
 
 		resp, err := http.Post(verifyURL, "application/json", nil)
 		if err != nil {
@@ -397,12 +383,12 @@ func TestAuthFlowGateway(t *testing.T) {
 		t.Logf("Verified new user %v", resp)
 	})
 
-	var createdUser *userCreatedEvent
+	var createdUser *auth.NewUserEvent
 
 	select {
 	case <-time.After(time.Second):
 	case e := <-eventChan:
-		n, ok := e.(*userCreatedEvent)
+		n, ok := e.(*auth.NewUserEvent)
 		if !ok {
 			t.Fatal("got incorrent event")
 		}
@@ -555,29 +541,26 @@ func TestAuthFlowGateway(t *testing.T) {
 		t.Logf("Forgot password %v", resp)
 	})
 
-	var forgotReq *auth.ForgotPasswordRequest
+	var notification2 *npb.Notification
 
 	select {
 	case <-time.After(time.Second):
-	case e := <-eventChan:
-		n, ok := e.(*auth.ForgotPasswordRequest)
-		if !ok {
-			t.Fatal("got incorrent event")
-		}
-		forgotReq = n
+	case notification2 = <-testProvider.Outbox():
 	}
 
-	if forgotReq == nil {
-		t.Fatal("did not get forgot password notification")
+	if notification2 == nil {
+		t.Fatal("did not get new user notification")
 	}
 
-	t.Logf("Forgot password request %v", createdUser)
+	r2, _ := regexp.Compile("Temporary Password: *")
+	lt2 := r2.FindStringIndex(notification2.Data.Body)
+	tmpPwd := notification2.Data.Body[lt2[1] : lt2[1]+10]
 
 	t.Run("authenticate user with temp password", func(t *testing.T) {
 		req, err := protojson.Marshal(&pb.AuthCredentials{
-			Type:     pb.LoginType(pb.LoginType_value[forgotReq.UsernameType]),
-			Username: forgotReq.Username,
-			Password: forgotReq.TempPassword,
+			Type:     usr.Type,
+			Username: usr.Username,
+			Password: tmpPwd,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -611,7 +594,7 @@ func TestAuthFlowGateway(t *testing.T) {
 
 	t.Run("report unauthorized password change", func(t *testing.T) {
 		reportURL := fmt.Sprintf("%sreport_pwd_change/%s?type=%s",
-			baseURL, forgotReq.Username, pb.LoginType(pb.LoginType_value[forgotReq.UsernameType]))
+			baseURL, usr.Username, usr.Type)
 
 		resp, err := http.Post(reportURL, "application/json", nil)
 		if err != nil {

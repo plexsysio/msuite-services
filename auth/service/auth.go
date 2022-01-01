@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"math/rand"
 	"net/http"
@@ -19,9 +20,11 @@ import (
 	"github.com/plexsysio/msuite-services/app_errors"
 	"github.com/plexsysio/msuite-services/auth/openapiv2"
 	"github.com/plexsysio/msuite-services/auth/pb"
+	npb "github.com/plexsysio/msuite-services/notifications/pb"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -29,6 +32,12 @@ var (
 	log           = logger.Logger("auth")
 	OTP_LEN uint8 = 6
 	otpGen        = &otp.TOTP{Length: OTP_LEN}
+)
+
+var (
+	BaseUrl    = "http://localhost:10000"
+	OrgName    = "PlexsysIO"
+	OrgContact = "plexsys@email.com"
 )
 
 const DefaultTimeout time.Duration = time.Second * 10
@@ -47,10 +56,6 @@ func (u *unverifiedUser) GetID() string {
 
 func (u *unverifiedUser) LockString() string {
 	return u.GetNamespace() + "/" + u.GetID()
-}
-
-func (u *unverifiedUser) Topic() string {
-	return "NewUserRegistration"
 }
 
 func (u *unverifiedUser) SetCreated(i int64) { u.Created = i }
@@ -84,10 +89,6 @@ func (u *verifiedUser) LockString() string {
 	return u.GetNamespace() + "/" + u.GetID()
 }
 
-func (u *verifiedUser) Topic() string {
-	return "NewUserCreated"
-}
-
 func (u *verifiedUser) ID() string {
 	return u.GetID()
 }
@@ -117,31 +118,32 @@ func (u *verifiedUser) Unmarshal(buf []byte) error {
 	return proto.Unmarshal(buf, u.VerifiedUser)
 }
 
-type ForgotPasswordRequest struct {
-	Username     string
-	UsernameType string
-	TempPassword string
+type NewUserEvent struct {
+	UserId   string
+	Username string
+	Type     pb.LoginType
 }
 
-func (f *ForgotPasswordRequest) Topic() string {
-	return "UserForgotPassword"
+func (NewUserEvent) Topic() string {
+	return "NewUserRegistration"
 }
 
-func (f *ForgotPasswordRequest) Marshal() ([]byte, error) {
-	return json.Marshal(f)
+func (n *NewUserEvent) Marshal() ([]byte, error) {
+	return json.Marshal(n)
 }
 
-func (f *ForgotPasswordRequest) Unmarshal(buf []byte) error {
-	return json.Unmarshal(buf, f)
+func (n *NewUserEvent) Unmarshal(buf []byte) error {
+	return json.Unmarshal(buf, n)
 }
 
 type authServer struct {
 	pb.UnimplementedAuthServer
 
-	dbP  gkvstore.Store
-	lckr dLocker.DLocker
-	ev   events.Events
-	jm   auth.JWTManager
+	dbP    gkvstore.Store
+	lckr   dLocker.DLocker
+	ev     events.Events
+	jm     auth.JWTManager
+	client func(context.Context, string, ...grpc.DialOption) (*grpc.ClientConn, error)
 }
 
 func New(svc core.Service) error {
@@ -176,10 +178,11 @@ func New(svc core.Service) error {
 	}
 
 	pb.RegisterAuthServer(grpcApi.Server(), &authServer{
-		dbP:  store,
-		lckr: lkApi,
-		ev:   evApi,
-		jm:   authApi.JWT(),
+		dbP:    store,
+		lckr:   lkApi,
+		ev:     evApi,
+		jm:     authApi.JWT(),
+		client: grpcApi.Client,
 	})
 	log.Info("Auth service registered")
 
@@ -276,11 +279,9 @@ func (s *authServer) Register(c context.Context, creds *pb.AuthCredentials) (*pb
 		return nil, app_errors.ErrInternal("failed creating user entry %v", err)
 	}
 
-	// Publish new user creation event. This can be used by other services
-	// to send notifications etc
-	err = s.ev.Broadcast(c, usrObj)
+	err = s.sendRegistrationNotification(c, usrObj)
 	if err != nil {
-		log.Warnf("failed to broadcast user registration msg %v", usrObj)
+		log.Warnf("failed sending registration notification %s", usrObj.GetUsername())
 	}
 
 	return &pb.AuthResponse{}, nil
@@ -344,11 +345,19 @@ func (s *authServer) Verify(c context.Context, verify *pb.VerifyReq) (*pb.AuthRe
 		return nil, app_errors.ErrInternal("failed creating user entry %v", err)
 	}
 
-	// Step 3: Broadcast new user creation
-	err = s.ev.Broadcast(c, verifiedUsr)
-	if err != nil {
-		log.Warnf("failed broadcasting new user creation Err: %v", err)
+	// Step 3: Broadcast new user creation event
+	newUserEv := &NewUserEvent{
+		UserId:   verifiedUsr.GetID(),
+		Username: verifiedUsr.GetUsername(),
+		Type:     verifiedUsr.GetType(),
 	}
+	err = s.ev.Broadcast(c, newUserEv)
+	if err != nil {
+		log.Warnf("failed broadcasting new user event %v", newUserEv)
+	}
+
+	// Set redirect URL. This handling is part of go-msuite lib
+	grpc.SendHeader(c, metadata.Pairs("Location", BaseUrl))
 
 	return &pb.AuthResponse{}, nil
 }
@@ -574,16 +583,10 @@ func (s *authServer) ForgotPassword(c context.Context, creds *pb.AuthCredentials
 		return nil, app_errors.ErrInternal("failed to update user")
 	}
 
-	// Publish new forgotPasswordUser event. This can be used by other services
-	// to send notifications etc
-	forgotUser := &ForgotPasswordRequest{
-		Username:     usr.Username,
-		UsernameType: usr.Type.String(),
-		TempPassword: tempPwd,
-	}
-	err = s.ev.Broadcast(c, forgotUser)
+	err = s.sendForgotPwdNotification(c, usr, tempPwd)
 	if err != nil {
-		log.Warnf("Failed to broadcast user forgot password msg %v", forgotUser)
+		log.Errorf("failed to send notification with temp password %v", err)
+		return nil, app_errors.ErrInternal("failed to send notification")
 	}
 
 	return &pb.AuthResponse{}, nil
@@ -638,7 +641,107 @@ func RandStringBytes(n int) string {
 	return string(b)
 }
 
-var user_registration_email = `<style>
+func (s *authServer) sendRegistrationNotification(ctx context.Context, usr *unverifiedUser) error {
+	conn, err := s.client(ctx, "notifications", grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	var req *npb.SendReq
+
+	switch usr.GetType() {
+	case pb.LoginType_Email:
+		req = &npb.SendReq{
+			Type: npb.NotificationType_EMAIL,
+			Data: &npb.Msg{
+				From:  OrgContact,
+				To:    usr.GetUsername(),
+				Title: "Welcome!",
+				Body: fmt.Sprintf(
+					userRegistrationEmail,
+					OrgName,
+					BaseUrl,
+					usr.GetCode(), usr.GetType(), usr.GetUsername(),
+					OrgName,
+				),
+			},
+		}
+	case pb.LoginType_Mobile:
+		req = &npb.SendReq{
+			Type: npb.NotificationType_SMS,
+			Data: &npb.Msg{
+				From:  OrgName,
+				To:    usr.GetUsername(),
+				Title: "Welcome!",
+				Body:  fmt.Sprintf(userRegistrationSMS, usr.GetCode()),
+			},
+		}
+	default:
+		return errors.New("unsupported login type")
+	}
+
+	resp, err := npb.NewNotificationsClient(conn).Send(ctx, req)
+	if err != nil {
+		return err
+	}
+	log.Debugf("sent registration msg to user %s notification %s", usr.GetUsername(), resp.GetId())
+	return nil
+}
+
+func (s *authServer) sendForgotPwdNotification(ctx context.Context, usr *verifiedUser, tmpPwd string) error {
+	conn, err := s.client(ctx, "notifications", grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	var req *npb.SendReq
+
+	switch usr.GetType() {
+	case pb.LoginType_Email:
+		req = &npb.SendReq{
+			Type: npb.NotificationType_EMAIL,
+			Data: &npb.Msg{
+				From:  OrgContact,
+				To:    usr.GetUsername(),
+				Title: "Account recovery",
+				Body: fmt.Sprintf(
+					forgotPwdEmail,
+					usr.GetUsername(),
+					tmpPwd,
+					BaseUrl, usr.GetUsername(), usr.GetType(), tmpPwd,
+					OrgName,
+				),
+			},
+		}
+	case pb.LoginType_Mobile:
+		req = &npb.SendReq{
+			Type: npb.NotificationType_SMS,
+			Data: &npb.Msg{
+				From:  OrgName,
+				To:    usr.GetUsername(),
+				Title: "Account Recovery",
+				Body: fmt.Sprintf(
+					forgotPwdSMS,
+					tmpPwd,
+					BaseUrl, usr.GetUsername(), usr.GetType(), tmpPwd,
+				),
+			},
+		}
+	default:
+		return errors.New("unsupported login type")
+	}
+
+	resp, err := npb.NewNotificationsClient(conn).Send(ctx, req)
+	if err != nil {
+		return err
+	}
+	log.Debugf("sent temp password msg to user %s notification %s", usr.GetUsername(), resp.GetId())
+	return nil
+}
+
+var userRegistrationEmail = `<style>
 	.btn-link{
 	  border:none;
 	  outline:none;
@@ -652,16 +755,18 @@ var user_registration_email = `<style>
 	}
 	</style>
 	<p>Hi!</p>
-	<p>Thanks for registering with UrbanTrainers!</p>
+	<p>Thanks for registering with %s!</p>
 	<p>As a final step in the registration, please click on the following link to verify
 	your email address and you are all set!</p>
-	<p><form action="http://localhost:8080/auth/v1/verify/%s?type=%s&username=%s" method="post">
+	<p><form action="http://%s/auth/v1/verify/%s?type=%s&username=%s" method="post">
 	  <button type="submit" name="verify_btn" class="btn-link">Verify Email Address</button>
 	</form></p>
 	<p>Thanks,</p>
-	<p>UrbanTrainers Team</p>`
+	<p>%s Team</p>`
 
-var forgot_pwd_email = `<style>
+var userRegistrationSMS = "Your OTP is %s. Please use it to complete the registration process."
+
+var forgotPwdEmail = `<style>
 	.btn-link{
 	  border:none;
 	  outline:none;
@@ -680,17 +785,16 @@ var forgot_pwd_email = `<style>
 	<p>Username: %s</p>
 	<p>Temporary Password: %s</p>
 	<p>If you did not request to reset the password, please click on the following link:</p>
-	<p><form action="http://localhost:8080/auth/v1/report_pwd_change/%s?type=%s&password=%s" method="post">
+	<p><form action="http://%s/auth/v1/report_pwd_change/%s?type=%s&password=%s" method="post">
 	<button type="submit" name="verify_btn" class="btn-link">Report unauthorized password change</button>
 	</form></p>
 	<p>The temporary password will be valid for a period of 24 hours. It is recommended that
 	you reset the password immediately after logging in. If you fail to change within 24 hours, you
 	will need to re-submit the password change request. This is required for your account's safety!</p>
 	<p>Thanks,</p>
-	<p>UrbanTrainers Team</p>`
+	<p>%s Team</p>`
 
-var user_registration_sms = "Your OTP is %s. Please use it to complete the registration process."
-var user_forgot_password_sms = `<style>
+var forgotPwdSMS = `<style>
 	.btn-link{
 	border:none;
   	outline:none;
@@ -704,6 +808,6 @@ var user_forgot_password_sms = `<style>
 	}
 	</style>
 	<p>Your OTP is %s. Please use it to reset your password.</p>
-	<p><form action="http://localhost:8080/auth/v1/report_pwd_change/%s?type=%s&password=%s" method="post">
+	<p><form action="http://%s/auth/v1/report_pwd_change/%s?type=%s&password=%s" method="post">
 	<button type="submit" name="verify_btn" class="btn-link">Report unauthorized password change</button>
 	</form></p>`

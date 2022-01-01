@@ -12,6 +12,7 @@ import (
 	"github.com/plexsysio/go-msuite/modules/events"
 	commonpb "github.com/plexsysio/msuite-services/common/pb"
 	"github.com/plexsysio/msuite-services/notifications/pb"
+	"github.com/plexsysio/msuite-services/notifications/providers"
 	notifications "github.com/plexsysio/msuite-services/notifications/service"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -64,7 +65,7 @@ func TestNotificationsFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = notifications.NewCtorWithProvider(testProvider)(svc)
+	err = notifications.NewWithProviders(svc, []providers.Provider{testProvider})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +249,7 @@ func TestNotificationsFlowGateway(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = notifications.NewCtorWithProvider(testProvider)(svc)
+	err = notifications.NewWithProviders(svc, []providers.Provider{testProvider})
 	if err != nil {
 		t.Fatal(err)
 	}

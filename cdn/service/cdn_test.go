@@ -23,11 +23,16 @@ func TestCDNFlow(t *testing.T) {
 	logger.SetLogLevel("*", "Error")
 
 	svc, err := msuite.New(
-		msuite.WithService("CDN", cdn.NewCDNService),
-		msuite.WithP2PPort(10001),
+		msuite.WithServices("CDN"),
+		msuite.WithP2P(10001),
 		msuite.WithHTTP(10002),
 		msuite.WithFiles(),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = cdn.NewCDNService(svc)
 	if err != nil {
 		t.Fatal(err)
 	}
