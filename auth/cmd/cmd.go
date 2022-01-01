@@ -16,9 +16,6 @@ func main() {
 		msuite.WithGRPC("p2p", nil),
 		msuite.WithHTTP(10002),
 		msuite.WithLocker("inmem", nil),
-		msuite.WithServiceACL(map[string]string{
-			"dummyresource": "admin",
-		}),
 	)
 	if err != nil {
 		fmt.Println("failed to start node", err)
