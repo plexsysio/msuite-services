@@ -35,7 +35,7 @@ var (
 )
 
 var (
-	BaseUrl    = "http://localhost:10000"
+	BaseUrl    = "http://192.168.0.167:10000"
 	OrgName    = "PlexsysIO"
 	OrgContact = "plexsys@email.com"
 )
@@ -758,7 +758,7 @@ var userRegistrationEmail = `<style>
 	<p>Thanks for registering with %s!</p>
 	<p>As a final step in the registration, please click on the following link to verify
 	your email address and you are all set!</p>
-	<p><form action="http://%s/auth/v1/verify/%s?type=%s&username=%s" method="post">
+	<p><form action="%s/auth/v1/verify/%s?type=%s&username=%s" method="post">
 	  <button type="submit" name="verify_btn" class="btn-link">Verify Email Address</button>
 	</form></p>
 	<p>Thanks,</p>
@@ -785,7 +785,7 @@ var forgotPwdEmail = `<style>
 	<p>Username: %s</p>
 	<p>Temporary Password: %s</p>
 	<p>If you did not request to reset the password, please click on the following link:</p>
-	<p><form action="http://%s/auth/v1/report_pwd_change/%s?type=%s&password=%s" method="post">
+	<p><form action="%s/auth/v1/report_pwd_change/%s?type=%s&password=%s" method="post">
 	<button type="submit" name="verify_btn" class="btn-link">Report unauthorized password change</button>
 	</form></p>
 	<p>The temporary password will be valid for a period of 24 hours. It is recommended that
@@ -808,6 +808,6 @@ var forgotPwdSMS = `<style>
 	}
 	</style>
 	<p>Your OTP is %s. Please use it to reset your password.</p>
-	<p><form action="http://%s/auth/v1/report_pwd_change/%s?type=%s&password=%s" method="post">
+	<p><form action="%s/auth/v1/report_pwd_change/%s?type=%s&password=%s" method="post">
 	<button type="submit" name="verify_btn" class="btn-link">Report unauthorized password change</button>
 	</form></p>`
