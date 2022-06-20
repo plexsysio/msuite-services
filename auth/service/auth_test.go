@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,7 +56,7 @@ func (t *testNotifProvider) Outbox() <-chan *npb.Notification {
 }
 
 func TestAuthFlow(t *testing.T) {
-	logger.SetLogLevel("*", "Error")
+	logger.SetLogLevel("auth", "Error")
 
 	svc, err := msuite.New(
 		msuite.WithServices("auth", "notifications"),
@@ -136,9 +137,11 @@ func TestAuthFlow(t *testing.T) {
 		t.Fatal("did not get new user notification")
 	}
 
-	r, _ := regexp.Compile(fmt.Sprintf("http://%s/auth/v1/verify/*", auth.BaseUrl))
-	lt := r.FindStringIndex(notification1.Data.Body)
-	code := notification1.Data.Body[lt[1] : lt[1]+20]
+	ss := strings.Split(notification1.Data.Body, fmt.Sprintf("%s/auth/v1/verify/", auth.BaseUrl))
+	if len(ss) != 2 {
+		t.Fatal("incorrect notification", notification1.Data.Body)
+	}
+	code := ss[1][:20]
 
 	t.Run("verify user", func(t *testing.T) {
 		resp, err := authClient.Verify(reqCtx, &pb.VerifyReq{
@@ -279,7 +282,7 @@ func TestAuthFlow(t *testing.T) {
 }
 
 func TestAuthFlowGateway(t *testing.T) {
-	_ = logger.SetLogLevel("*", "Debug")
+	_ = logger.SetLogLevel("auth", "Debug")
 
 	svc, err := msuite.New(
 		msuite.WithServices("auth", "notifications"),
@@ -363,9 +366,11 @@ func TestAuthFlowGateway(t *testing.T) {
 		t.Fatal("did not get new user notification")
 	}
 
-	r, _ := regexp.Compile(fmt.Sprintf("http://%s/auth/v1/verify/*", auth.BaseUrl))
-	lt := r.FindStringIndex(notification1.Data.Body)
-	code := notification1.Data.Body[lt[1] : lt[1]+20]
+	ss := strings.Split(notification1.Data.Body, fmt.Sprintf("%s/auth/v1/verify/", auth.BaseUrl))
+	if len(ss) != 2 {
+		t.Fatal("incorrect notification", notification1.Data.Body)
+	}
+	code := ss[1][:20]
 
 	t.Run("verify user", func(t *testing.T) {
 		verifyURL := fmt.Sprintf("%sverify/%s?creds.type=%s&creds.username=%s",
@@ -552,9 +557,11 @@ func TestAuthFlowGateway(t *testing.T) {
 		t.Fatal("did not get new user notification")
 	}
 
-	r2, _ := regexp.Compile("Temporary Password: *")
-	lt2 := r2.FindStringIndex(notification2.Data.Body)
-	tmpPwd := notification2.Data.Body[lt2[1] : lt2[1]+10]
+	ss2 := strings.Split(notification2.Data.Body, "Temporary Password: ")
+	if len(ss) != 2 {
+		t.Fatal("incorrect notification", notification2.Data.Body)
+	}
+	tmpPwd := ss2[1][:10]
 
 	t.Run("authenticate user with temp password", func(t *testing.T) {
 		req, err := protojson.Marshal(&pb.AuthCredentials{

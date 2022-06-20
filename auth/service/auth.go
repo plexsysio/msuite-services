@@ -24,7 +24,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -357,7 +356,7 @@ func (s *authServer) Verify(c context.Context, verify *pb.VerifyReq) (*pb.AuthRe
 	}
 
 	// Set redirect URL. This handling is part of go-msuite lib
-	grpc.SendHeader(c, metadata.Pairs("Location", BaseUrl))
+	// grpc.SendHeader(c, metadata.Pairs("Location", BaseUrl))
 
 	return &pb.AuthResponse{}, nil
 }
